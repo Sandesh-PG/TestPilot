@@ -51,13 +51,13 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
                     </div>
 
                     <div className="flex gap-3">
-                        <button className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/70 px-4 py-2 text-sm font-medium text-zinc-200 transition-colors hover:border-zinc-600 hover:bg-zinc-800">
+                        <button className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/70 px-4 py-2 text-sm font-medium text-zinc-200 transition-colors hover:border-zinc-600 hover:bg-zinc-800">
                             <RefreshCw className="h-4 w-4" />
                             Sync
                         </button>
                         <button
                             onClick={onDisconnect}
-                            className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/70 px-4 py-2 text-sm font-medium text-zinc-200 transition-colors hover:border-zinc-600 hover:bg-zinc-800"
+                            className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/70 px-4 py-2 text-sm font-medium text-zinc-200 transition-colors hover:border-zinc-600 hover:bg-zinc-800"
                         >
                             <Trash2 className="h-4 w-4" />
                             Disconnect

@@ -20,19 +20,175 @@ type GitHubRepository = {
     updated_at: string;
 };
 
-type ConnectedRepository = GitHubRepository;
+type PersistedRepository = {
+    id: number;
+    name: string;
+    full_name: string;
+    owner: {
+        login: string;
+    };
+    html_url: string;
+    default_branch: string;
+    private: boolean;
+    description: string | null;
+    language: string | null;
+    updated_at: string;
+    connected_at?: string | null;
+    last_sync?: string | null;
+};
+
+type WorkspaceRepositoryState = 'loading' | 'connected' | 'not-connected' | 'error';
+
+const mapPersistedRepository = (repository: Partial<PersistedRepository> | Record<string, unknown> | null): GitHubRepository | null => {
+    if (!repository || typeof repository !== 'object') {
+        return null;
+    }
+
+    const record = repository as Record<string, unknown>;
+
+    const id = typeof record.id === 'number'
+        ? record.id
+        : typeof record.githubRepoId === 'number'
+            ? record.githubRepoId
+            : null;
+
+    const name = typeof record.name === 'string' ? record.name : null;
+    const fullName = typeof record.full_name === 'string'
+        ? record.full_name
+        : typeof record.fullName === 'string'
+            ? record.fullName
+            : null;
+
+    const ownerValue = record.owner;
+    const ownerLogin = typeof ownerValue === 'string'
+        ? ownerValue
+        : ownerValue && typeof ownerValue === 'object' && typeof (ownerValue as { login?: unknown }).login === 'string'
+            ? (ownerValue as { login: string }).login
+            : null;
+
+    const htmlUrl = typeof record.html_url === 'string'
+        ? record.html_url
+        : typeof record.url === 'string'
+            ? record.url
+            : null;
+
+    const defaultBranch = typeof record.default_branch === 'string'
+        ? record.default_branch
+        : typeof record.defaultBranch === 'string'
+            ? record.defaultBranch
+            : null;
+
+    const isPrivate = typeof record.private === 'boolean'
+        ? record.private
+        : typeof record.isPrivate === 'boolean'
+            ? record.isPrivate
+            : false;
+
+    const updatedAt = typeof record.updated_at === 'string'
+        ? record.updated_at
+        : typeof record.connectedAt === 'string'
+            ? record.connectedAt
+            : typeof record.connected_at === 'string'
+                ? record.connected_at
+                : new Date().toISOString();
+
+    if (
+        id === null ||
+        !name ||
+        !fullName ||
+        !ownerLogin ||
+        !htmlUrl ||
+        !defaultBranch
+    ) {
+        return null;
+    }
+
+    return {
+        id,
+        name,
+        full_name: fullName,
+        owner: {
+            login: ownerLogin,
+        },
+        html_url: htmlUrl,
+        default_branch: defaultBranch,
+        private: isPrivate,
+        description: typeof record.description === 'string' ? record.description : null,
+        language: typeof record.language === 'string' ? record.language : null,
+        updated_at: updatedAt,
+    };
+};
 
 export default function WorkSpaceBody() {
     const { userDetail } = useContext(UserDetailContext);
     const [repositories, setRepositories] = useState<GitHubRepository[]>([]);
     const [selectedRepositoryId, setSelectedRepositoryId] = useState<number | null>(null);
     const [connectedRepository, setConnectedRepository] = useState<GitHubRepository | null>(null);
+    const [repositoryState, setRepositoryState] = useState<WorkspaceRepositoryState>('loading');
+    const [repositoryError, setRepositoryError] = useState<string | null>(null);
     const [isLoadingRepositories, setIsLoadingRepositories] = useState(true);
     const [hasGitHubConnection, setHasGitHubConnection] = useState<boolean | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    const [reloadNonce, setReloadNonce] = useState(0);
 
     useEffect(() => {
+        let isMounted = true;
+
+        const loadPersistedRepository = async () => {
+            setRepositoryState('loading');
+            setRepositoryError(null);
+            setErrorMessage(null);
+
+            try {
+                const response = await fetch('/api/repositories', {
+                    method: 'GET',
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Repository lookup failed with status ${response.status}`);
+                }
+
+                const data: { repository?: PersistedRepository | null } = await response.json();
+                const persistedRepository = data.repository ?? null;
+                const mappedRepository = mapPersistedRepository(persistedRepository);
+
+                if (!isMounted) {
+                    return;
+                }
+
+                if (!mappedRepository) {
+                    setConnectedRepository(null);
+                    setRepositoryState(persistedRepository ? 'error' : 'not-connected');
+                    if (persistedRepository) {
+                        setRepositoryError('The stored workspace repository could not be loaded.');
+                    }
+                    return;
+                }
+
+                setConnectedRepository(mappedRepository);
+                setRepositoryState('connected');
+            } catch {
+                if (!isMounted) {
+                    return;
+                }
+
+                setConnectedRepository(null);
+                setRepositoryState('error');
+                setRepositoryError('Unable to load the connected repository right now.');
+            }
+        };
+
+        void loadPersistedRepository();
+
+        return () => {
+            isMounted = false;
+        };
+    }, []);
+
+    useEffect(() => {
+        if (repositoryState !== 'not-connected') {
+            return;
+        }
+
         const controller = new AbortController();
 
         const loadRepositories = async () => {
@@ -73,7 +229,7 @@ export default function WorkSpaceBody() {
 
                     return loadedRepositories[0]?.id ?? null;
                 });
-            } catch (error) {
+            } catch {
                 if (!controller.signal.aborted) {
                     setHasGitHubConnection(true);
                     setErrorMessage('Unable to load GitHub repositories right now.');
@@ -85,23 +241,95 @@ export default function WorkSpaceBody() {
             }
         };
 
-        loadRepositories();
+        void loadRepositories();
 
         return () => {
             controller.abort();
         };
-    }, []);
+    }, [repositoryState]);
 
     const selectedRepository = repositories.find(
         (repository) => repository.id === selectedRepositoryId
     ) ?? null;
 
-    const handleConnectRepository = () => {
+    const handleConnectRepository = async () => {
         if (!selectedRepository) {
             return;
         }
 
-        setConnectedRepository(selectedRepository);
+        setErrorMessage(null);
+        setRepositoryError(null);
+
+        try {
+            const response = await fetch('/api/repositories', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    repository: {
+                        id: selectedRepository.id,
+                        name: selectedRepository.name,
+                        full_name: selectedRepository.full_name,
+                        owner: { login: selectedRepository.owner.login },
+                        html_url: selectedRepository.html_url,
+                        default_branch: selectedRepository.default_branch,
+                        private: selectedRepository.private,
+                        description: selectedRepository.description,
+                        language: selectedRepository.language,
+                    },
+                }),
+            });
+
+            if (!response.ok) {
+                const payload = await response.json().catch(() => null);
+                const errorMessageText = payload?.error ?? 'Unable to connect repository right now.';
+                setErrorMessage(errorMessageText);
+                return;
+            }
+
+            const payload: { repository?: PersistedRepository | Record<string, unknown> | null } = await response.json().catch(() => ({}));
+            const mappedRepository = mapPersistedRepository(payload.repository ?? null);
+
+            if (!mappedRepository) {
+                setErrorMessage('Unable to connect repository right now.');
+                return;
+            }
+
+            setConnectedRepository(mappedRepository);
+            setRepositoryState('connected');
+            setRepositories([]);
+            setSelectedRepositoryId(null);
+            setHasGitHubConnection(null);
+            setErrorMessage(null);
+        } catch {
+            setErrorMessage('Unable to connect repository right now.');
+        }
+    };
+
+    const handleDisconnectRepository = async () => {
+        try {
+            const response = await fetch('/api/repositories', {
+                method: 'DELETE',
+            });
+
+            if (!response.ok) {
+                const payload = await response.json().catch(() => null);
+                const errorMessageText = payload?.error ?? 'Unable to disconnect repository right now.';
+                setErrorMessage(errorMessageText);
+                return;
+            }
+
+            setConnectedRepository(null);
+            setRepositoryState('not-connected');
+            setRepositories([]);
+            setSelectedRepositoryId(null);
+            setHasGitHubConnection(true);
+            setIsLoadingRepositories(true);
+            setErrorMessage(null);
+        } catch {
+            setErrorMessage('Unable to disconnect repository right now.');
+        }
     };
 
     const handleRetry = () => {
@@ -165,7 +393,7 @@ export default function WorkSpaceBody() {
                         <button
                             type="button"
                             onClick={handleRetry}
-                            className="inline-flex items-center justify-center rounded-lg border border-zinc-700 bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200"
+                            className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-zinc-700 bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200"
                         >
                             Retry
                         </button>
@@ -187,7 +415,7 @@ export default function WorkSpaceBody() {
                         <button
                             type="button"
                             onClick={handleRetry}
-                            className="inline-flex items-center justify-center rounded-lg border border-zinc-700 bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200"
+                            className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-zinc-700 bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200"
                         >
                             Refresh
                         </button>
@@ -210,7 +438,7 @@ export default function WorkSpaceBody() {
                             type="button"
                             onClick={handleConnectRepository}
                             disabled={!selectedRepository}
-                            className="inline-flex items-center justify-center rounded-lg bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
+                            className="inline-flex cursor-pointer items-center justify-center rounded-lg bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
                         >
                             Connect Repository
                         </button>
@@ -288,6 +516,20 @@ export default function WorkSpaceBody() {
         );
     };
 
+    const renderLoadingState = () => (
+        <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/20 p-6 shadow-xl backdrop-blur-sm">
+            <div className="space-y-4 animate-pulse">
+                <div className="h-4 w-40 rounded bg-zinc-800" />
+                <div className="grid gap-4 md:grid-cols-2">
+                    <div className="h-28 rounded-xl bg-zinc-900/60" />
+                    <div className="h-28 rounded-xl bg-zinc-900/60" />
+                    <div className="h-28 rounded-xl bg-zinc-900/60" />
+                    <div className="h-28 rounded-xl bg-zinc-900/60" />
+                </div>
+            </div>
+        </div>
+    );
+
     return (
         <main className="min-h-[calc(100vh-73px)] bg-zinc-950 text-zinc-100 flex items-center justify-center p-4 md:p-8">
             <div className="w-full max-w-4xl space-y-8">
@@ -300,15 +542,39 @@ export default function WorkSpaceBody() {
                     </p>
                 </div>
 
-                {connectedRepository ? (
+                {repositoryState === 'loading' && renderLoadingState()}
+
+                {repositoryState === 'connected' && connectedRepository && (
                     <RepoDetails
                         repo={connectedRepository}
-                        onDisconnect={() => setConnectedRepo(null)}
+                        onDisconnect={handleDisconnectRepository}
                     />
-                ) : !hasGitHubConnection ? (
-                    <EmptyWorkSpace />
-                ) : (
-                    renderRepositorySelection()
+                )}
+
+                {repositoryState === 'error' && (
+                    <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/20 p-6 shadow-xl backdrop-blur-sm">
+                        <div className="space-y-4">
+                            <div>
+                                <h2 className="text-xl font-semibold text-zinc-100">Workspace unavailable</h2>
+                                <p className="mt-2 text-sm text-zinc-400">{repositoryError ?? 'Unable to load the connected repository right now.'}</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => window.location.reload()}
+                                className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-zinc-700 bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200"
+                            >
+                                Refresh page
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {repositoryState === 'not-connected' && (
+                    !hasGitHubConnection ? (
+                        <EmptyWorkSpace />
+                    ) : (
+                        renderRepositorySelection()
+                    )
                 )}
             </div>
         </main>

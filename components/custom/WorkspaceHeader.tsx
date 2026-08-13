@@ -37,7 +37,7 @@ const WorkspaceHeader = () => {
 
             {/* User Profile */}
             <div className='flex items-center gap-4'>
-                <UserButton afterSignOutUrl="/" />
+                <UserButton />
             </div>
         </header>
     )
