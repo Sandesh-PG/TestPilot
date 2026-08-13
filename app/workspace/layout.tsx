@@ -6,7 +6,7 @@ function WorkspaceLayout({ children }: Readonly<{ children: React.ReactNode }>) 
             <WorkspaceHeader />
             {children}
         </div>
-    )
+    )   
 };
 
 export default WorkspaceLayout;
