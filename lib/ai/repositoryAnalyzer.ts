@@ -18,6 +18,14 @@ export type InteractionSurface = {
     sourceFiles: string[];
 };
 
+export type TestableSurface = {
+    path: string;
+    sourceFiles: string[];
+    type: 'page' | 'api' | 'unknown';
+    methods: string[];
+    evidence: string[];
+};
+
 export type RepositoryAnalysis = {
     framework?: string;
     language?: string;
@@ -26,6 +34,8 @@ export type RepositoryAnalysis = {
     routes: RouteSurface[];
 
     apiEndpoints: ApiSurface[];
+
+    testableSurfaces: TestableSurface[];
 
     authentication: {
         detected: boolean;
@@ -104,6 +114,248 @@ function detectMethodsFromContent(content: string): string[] {
     }
 
     return Array.from(methods);
+}
+
+
+function addDetectedSurface(
+    map: Map<string, {
+        type: TestableSurface['type'];
+        methods: Set<string>;
+        sourceFiles: Set<string>;
+        evidence: Set<string>;
+    }>,
+    path: string,
+    type: TestableSurface['type'],
+    filePath: string,
+    evidence: string,
+    methods: string[] = []
+): void {
+    if (!path || !path.startsWith('/')) {
+        return;
+    }
+
+    const entry = map.get(path) ?? {
+        type,
+        methods: new Set<string>(),
+        sourceFiles: new Set<string>(),
+        evidence: new Set<string>(),
+    };
+
+    if (entry.type === 'unknown' && type !== 'unknown') {
+        entry.type = type;
+    }
+
+    for (const method of methods) {
+        entry.methods.add(method.toUpperCase());
+    }
+
+    entry.sourceFiles.add(filePath);
+    entry.evidence.add(evidence);
+    map.set(path, entry);
+}
+
+function detectGenericTestableSurfaces(
+    context: RepositoryContext
+): TestableSurface[] {
+    const surfaces = new Map<string, {
+        type: TestableSurface['type'];
+        methods: Set<string>;
+        sourceFiles: Set<string>;
+        evidence: Set<string>;
+    }>();
+
+    const fileByPath = new Map(
+        context.files.map((file) => [normalizePath(file.path), file])
+    );
+
+    // FastAPI commonly mounts routers like:
+    // app.include_router(stations.router, prefix="/stations")
+    // app.include_router(router, prefix="/api")
+    // Capture those prefixes so @router.get("/overview") becomes
+    // /stations/overview rather than incorrectly becoming /overview.
+    const routerPrefixes = new Map<string, string>();
+
+    for (const file of context.files) {
+        const content = file.content;
+
+        const includeRouterRegex =
+            /\binclude_router\s*\(\s*([A-Za-z_][\w.]*)\s*(?:,[^)]*?)?\bprefix\s*=\s*["'`]([^"'`]+)["'`]/g;
+
+        for (const match of content.matchAll(includeRouterRegex)) {
+            const routerName = match[1];
+            const prefix = match[2];
+
+            routerPrefixes.set(
+                routerName.split('.').pop() ?? routerName,
+                prefix
+            );
+        }
+    }
+
+    function normalizeRoutePath(path: string): string {
+        if (!path) return '/';
+
+        const normalized = path
+            .replace(/\/+/g, '/')
+            .replace(/\/$/, '');
+
+        return normalized || '/';
+    }
+
+    function getPythonRouterPrefix(filePath: string): string {
+        const file = fileByPath.get(normalizePath(filePath));
+
+        if (!file) return '';
+
+        const moduleName =
+            normalizePath(filePath)
+                .split('/')
+                .pop()
+                ?.replace(/\.py$/, '') ?? '';
+
+        // Prefer an explicitly imported router name when present.
+        const routerDeclaration =
+            file.content.match(
+                /\b([A-Za-z_]\w*)\s*=\s*(?:APIRouter|Blueprint)\s*\(/
+            )?.[1];
+
+        if (routerDeclaration && routerPrefixes.has(routerDeclaration)) {
+            return routerPrefixes.get(routerDeclaration) ?? '';
+        }
+
+        if (routerPrefixes.has(moduleName)) {
+            return routerPrefixes.get(moduleName) ?? '';
+        }
+
+        return '';
+    }
+
+    function resolvePythonRoute(
+        filePath: string,
+        routePath: string
+    ): string {
+        const prefix = getPythonRouterPrefix(filePath);
+
+        if (!prefix) {
+            return normalizeRoutePath(routePath);
+        }
+
+        return normalizeRoutePath(
+            `${prefix}/${routePath}`
+        );
+    }
+
+    // React Router declarations.
+    const reactRouteRegex =
+        /(?:<Route\b[^>]*\bpath\s*=\s*["'`]([^"'`]+)["'`]|(?:path)\s*:\s*["'`]([^"'`]+)["'`])/g;
+
+    // Express / Node style HTTP routes.
+    const httpRouteRegex =
+        /\b(?:app|router|server)\s*\.\s*(get|post|put|patch|delete|options|head)\s*\(\s*["'`]([^"'`]+)["'`]/gi;
+
+    // FastAPI / Flask decorator routes.
+    const decoratorRouteRegex =
+        /@(?:app|router)\s*\.\s*(get|post|put|patch|delete|options|head|route)\s*\(\s*["'`]([^"'`]+)["'`]/gi;
+
+    // Spring mappings.
+    const springRouteRegex =
+        /@(GetMapping|PostMapping|PutMapping|PatchMapping|DeleteMapping|RequestMapping)\s*(?:\(\s*)?(?:value\s*=\s*)?["'`]([^"'`]+)["'`]/gi;
+
+    for (const file of context.files) {
+        const content = file.content;
+        const normalizedFilePath = normalizePath(file.path);
+        const isPython = normalizedFilePath.endsWith('.py');
+
+        for (const match of content.matchAll(reactRouteRegex)) {
+            const path = match[1] ?? match[2];
+
+            if (!path || !path.startsWith('/')) {
+                continue;
+            }
+
+            addDetectedSurface(
+                surfaces,
+                normalizeRoutePath(path),
+                'page',
+                file.path,
+                'React Router route declaration'
+            );
+        }
+
+        for (const match of content.matchAll(httpRouteRegex)) {
+            const method = match[1].toUpperCase();
+            let path = match[2];
+
+            if (isPython) {
+                path = resolvePythonRoute(file.path, path);
+            }
+
+            addDetectedSurface(
+                surfaces,
+                normalizeRoutePath(path),
+                'api',
+                file.path,
+                `${method} HTTP route declaration`,
+                [method]
+            );
+        }
+
+        for (const match of content.matchAll(decoratorRouteRegex)) {
+            const decorator = match[1].toUpperCase();
+            let path = match[2];
+
+            if (isPython) {
+                path = resolvePythonRoute(file.path, path);
+            }
+
+            const methods =
+                decorator === 'ROUTE'
+                    ? []
+                    : [decorator];
+
+            addDetectedSurface(
+                surfaces,
+                normalizeRoutePath(path),
+                'api',
+                file.path,
+                `${match[1]} route declaration`,
+                methods
+            );
+        }
+
+        for (const match of content.matchAll(springRouteRegex)) {
+            const mapping = match[1].toUpperCase();
+            const path = match[2];
+
+            const methodMap: Record<string, string[]> = {
+                GETMAPPING: ['GET'],
+                POSTMAPPING: ['POST'],
+                PUTMAPPING: ['PUT'],
+                PATCHMAPPING: ['PATCH'],
+                DELETEMAPPING: ['DELETE'],
+                REQUESTMAPPING: [],
+            };
+
+            addDetectedSurface(
+                surfaces,
+                normalizeRoutePath(path),
+                'api',
+                file.path,
+                `${match[1]} route declaration`,
+                methodMap[mapping] ?? []
+            );
+        }
+    }
+
+    return Array.from(surfaces.entries())
+        .map(([path, entry]) => ({
+            path,
+            sourceFiles: Array.from(entry.sourceFiles).sort(),
+            type: entry.type,
+            methods: Array.from(entry.methods).sort(),
+            evidence: Array.from(entry.evidence).sort(),
+        }))
+        .sort((a, b) => a.path.localeCompare(b.path));
 }
 
 function getFileSet(context: RepositoryContext): Set<string> {
@@ -258,6 +510,10 @@ function validateRepositoryAnalysis(context: RepositoryContext, analysis: Reposi
         throw new Error('apiEndpoints must be an array');
     }
 
+    if (!Array.isArray(analysis.testableSurfaces)) {
+        throw new Error('testableSurfaces must be an array');
+    }
+
     if (!analysis.authentication || typeof analysis.authentication !== 'object') {
         throw new Error('authentication must be an object');
     }
@@ -293,6 +549,28 @@ function validateRepositoryAnalysis(context: RepositoryContext, analysis: Reposi
         for (const file of endpoint.sourceFiles) {
             if (!allowedFileSet.has(file)) {
                 throw new Error(`API source file not found in repository context: ${file}`);
+            }
+        }
+    }
+
+    for (const surface of analysis.testableSurfaces) {
+        if (typeof surface.path !== 'string' || !surface.path.startsWith('/')) {
+            throw new Error('Testable surface path is required and must start with /');
+        }
+
+        if (!Array.isArray(surface.sourceFiles)) {
+            throw new Error('Testable surface sourceFiles must be an array');
+        }
+
+        if (!Array.isArray(surface.methods) || !Array.isArray(surface.evidence)) {
+            throw new Error('Testable surface methods and evidence must be arrays');
+        }
+
+        for (const file of surface.sourceFiles) {
+            if (!allowedFileSet.has(file)) {
+                throw new Error(
+                    `Testable surface source file not found in repository context: ${file}`
+                );
             }
         }
     }
@@ -390,6 +668,7 @@ export function analyzeRepositoryContext(context: RepositoryContext): Repository
     const authDetected = authEvidence.length > 0;
     const interactions = findInteractionEvidence(context);
     const importantFiles = detectImportantFiles(context);
+    const testableSurfaces = detectGenericTestableSurfaces(context);
 
     const analysis: RepositoryAnalysis = {
         framework: context.project.type || undefined,
@@ -397,6 +676,7 @@ export function analyzeRepositoryContext(context: RepositoryContext): Repository
         packageManager: packageManager || context.project.packageManager || undefined,
         routes: routes.sort((a, b) => a.path.localeCompare(b.path)),
         apiEndpoints: apiEndpoints.sort((a, b) => a.route.localeCompare(b.route)),
+        testableSurfaces,
         authentication: {
             detected: authDetected,
             evidence: authEvidence,
@@ -404,7 +684,12 @@ export function analyzeRepositoryContext(context: RepositoryContext): Repository
         interactions,
         importantFiles,
         capabilities: {
-            hasApi: apiEndpoints.length > 0 || [...fileSet].some((path) => path.includes('/api/')),
+            hasApi:
+                apiEndpoints.length > 0 ||
+                testableSurfaces.some(
+                    (surface) => surface.type === 'api'
+                ) ||
+                [...fileSet].some((path) => path.includes('/api/')),
             hasAuthentication: authDetected,
             hasDatabase: detectDatabaseEvidence(context),
         },
