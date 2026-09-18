@@ -1,141 +1,166 @@
 # TestPilot
 
-TestPilot is an AI-powered test automation platform that analyzes a GitHub repository, generates application-aware test cases, executes them in a browser environment, and provides actionable insights from test results.
+TestPilot is an AI-assisted automated testing platform for software teams. It connects to a GitHub repository, analyzes the application context, generates meaningful test cases, and prepares the system for browser-based execution and result analysis.
 
 ## Overview
 
-Modern web applications can require significant manual effort to test. Engineers and QA teams need to understand application flows, create test cases, maintain automation scripts, execute tests, and investigate failures.
+Modern software delivery depends on reliable validation across user flows, API behavior, authentication, and regression risk. TestPilot reduces that burden by combining repository understanding, AI-driven reasoning, and browser automation in one workflow.
 
-TestPilot aims to streamline this workflow by combining repository analysis, AI-powered test generation, browser automation, and result analysis into a single platform.
+The platform is designed to:
 
-The intended workflow is:
+- connect a user to a GitHub repository
+- inspect application files and surfaces
+- infer critical routes, behavior, and dependencies
+- generate high-value test cases from the repository evidence
+- prepare test execution in a browser environment
+- capture execution results for review and issue analysis
 
-```text
-GitHub Repository
-       │
-       ▼
-Repository Analysis
-       │
-       ▼
-Application Context
-       │
-       ▼
-AI Test Generation
-       │
-       ▼
-Browser Test Execution
-       │
-       ▼
-Test Results
-       │
-       ▼
-AI-Powered Insights
-```
+## Core Features
 
-## Features
-
-- GitHub OAuth integration
-- GitHub repository discovery and selection
-- Persistent repository connections
-- Repository source-code analysis
-- AI-powered test-case generation
-- Structured test-case storage
-- Browser-based test execution
-- Test result and execution history
-- AI-assisted failure analysis and insights
-
-Some features are under active development.
+- GitHub OAuth authentication and repository access
+- repository discovery and connection workflow
+- source repository analysis and file context extraction
+- AI-generated test case suggestions based on detected application surfaces
+- structured storage of repositories and generated test cases
+- browser execution orchestration using Browserbase
+- database persistence with Drizzle and PostgreSQL
+- Stripe-powered checkout and account-related flows
 
 ## Architecture
 
-At a high level, TestPilot consists of the following components:
+TestPilot follows a modular Next.js application architecture built around the App Router.
 
 ```text
-┌───────────────────────┐
-│       Web Client      │
-│   Next.js + React     │
-└───────────┬───────────┘
-            │
-            ▼
-┌───────────────────────┐
-│    Next.js API Layer  │
-│      App Router       │
-└─────┬─────────┬───────┘
-      │         │
-      │         └─────────────────┐
-      ▼                           ▼
-┌───────────────┐        ┌────────────────┐
-│    GitHub     │        │     Clerk      │
-│      API      │        │ Authentication │
-└───────────────┘        └────────────────┘
-      │
-      ▼
-┌───────────────────────┐
-│   Repository Analysis │
-└───────────┬───────────┘
-            │
-            ▼
-┌───────────────────────┐
-│     AI Test Engine    │
-└───────────┬───────────┘
-            │
-            ▼
-┌───────────────────────┐
-│   Browser Execution   │
-│      BrowserBase      │
-└───────────┬───────────┘
-            │
-            ▼
-┌───────────────────────┐
-│  Results & Insights   │
-└───────────────────────┘
-
+User
+  │
+  ▼
+Next.js App (Frontend + API)
+  ├─ Clerk authentication
+  ├─ GitHub OAuth
+  ├─ Repository analysis
+  ├─ AI test generation
+  ├─ Browser execution orchestration
+  └─ Database persistence
           │
-          ▼
-┌───────────────────────┐
-│ Neon PostgreSQL +     │
-│ Drizzle ORM           │
-└───────────────────────┘
+          ├── PostgreSQL / Neon
+          ├── Drizzle ORM
+          ├── GitHub REST API
+          ├── Groq LLM
+          └── Browserbase
 ```
 
-Detailed architecture documentation is maintained separately in `docs/`.
-
-## Technology Stack
+## Tech Stack
 
 | Layer | Technology |
-|---|---|
+| --- | --- |
 | Frontend | Next.js, React, TypeScript |
 | Styling | Tailwind CSS |
 | Authentication | Clerk |
-| Source Control Integration | GitHub OAuth + GitHub REST API |
-| Backend | Next.js App Router API Routes |
+| Source Control | GitHub OAuth + GitHub REST API |
+| Backend | Next.js App Router API routes |
 | Database | PostgreSQL |
 | Database Hosting | Neon |
 | ORM | Drizzle ORM |
-| AI | LLM-based test generation and analysis |
-| Browser Automation | BrowserBase |
+| AI | Groq / LLM-powered analysis and test generation |
+| Browser Automation | Browserbase |
+| Payments | Stripe |
+
+## Repository Structure
+
+```text
+TestPilot/
+├── app/
+│   ├── api/
+│   │   ├── browserbase/
+│   │   ├── checkout/
+│   │   ├── github/
+│   │   ├── repositories/
+│   │   ├── test-cases/
+│   │   ├── users/
+│   │   └── webhooks/
+│   ├── sign-in/
+│   ├── sign-up/
+│   ├── workspace/
+│   ├── layout.tsx
+│   ├── page.tsx
+│   └── provider.tsx
+├── components/
+│   ├── custom/
+│   └── ui/
+├── context/
+├── db/
+│   ├── index.ts
+│   └── schema.ts
+├── docs/
+├── drizzle/
+├── lib/
+│   ├── ai/
+│   ├── browserbase/
+│   ├── github/
+│   ├── repository/
+│   ├── stripe.ts
+│   └── test-execution/
+├── public/
+├── next.config.ts
+├── package.json
+├── drizzle.config.ts
+├── tsconfig.json
+├── postcss.config.mjs
+├── components.json
+├── proxy.ts
+├── .gitignore
+├── readme.md
+└── docs/
+```
+
+## Prerequisites
+
+Before running the project, make sure you have:
+
+- Node.js 18+ or compatible LTS version
+- npm or pnpm
+- Git
+- access to a PostgreSQL-compatible database service such as Neon
+- Clerk application credentials
+- GitHub OAuth app credentials
+- Browserbase API credentials
+- Groq API credentials
+- Stripe keys if checkout or billing features are enabled
+
+## Environment Variables
+
+Create a `.env.local` file in the project root and define the required variables.
+
+Example configuration:
+
+```env
+DATABASE_URL=postgresql://...
+
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+CLERK_SECRET_KEY=...
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=...
+
+GITHUB_CLIENT_ID=...
+GITHUB_CLIENT_SECRET=...
+GITHUB_REDIRECT_URI=http://localhost:3000/api/github/callback
+
+GROQ_API_KEY=...
+GROQ_MODEL=openai/gpt-oss-20b
+
+BROWSERBASE_API_KEY=...
+BROWSERBASE_PROJECT_ID=...
+
+STRIPE_SECRET_KEY=...
+STRIPE_WEBHOOK_SECRET=...
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=...
+```
+
+> Do not commit secrets to version control. Use environment-specific files and secure secret management in production.
 
 ## Getting Started
 
-### Prerequisites
-
-Make sure the following are installed:
-
-- Node.js
-- npm
-- Git
-
-You will also need accounts/configuration for:
-
-- Clerk
-- GitHub OAuth
-- Neon PostgreSQL
-
-Additional services will be required as the AI and browser-execution layers are enabled.
-
-### Installation
-
-Clone the repository and install dependencies:
+### 1. Install dependencies
 
 ```bash
 git clone <repository-url>
@@ -143,114 +168,90 @@ cd TestPilot
 npm install
 ```
 
-### Environment Variables
+### 2. Configure environment variables
 
-Create a `.env.local` file in the project root and configure the required application credentials.
+Add the required variables to `.env.local` before starting the application.
 
-The exact environment variables depend on the enabled integrations. At minimum, the application requires configuration for:
-
-- Clerk
-- GitHub OAuth
-- Neon/PostgreSQL
-
-Do not commit secrets or `.env.local` to source control.
-
-### Database
-
-Generate/push the current Drizzle schema using:
-
-```bash
-npm run db:push
-```
-
-The project also provides:
+### 3. Set up the database
 
 ```bash
 npm run db:generate
+npm run db:push
+```
+
+Optional database tools:
+
+```bash
 npm run db:studio
 ```
 
-### Development Server
-
-Start the application with:
+### 4. Run the app
 
 ```bash
 npm run dev
 ```
 
-The development server will be available at:
+The app will be available at:
 
 ```text
 http://localhost:3000
 ```
 
-## Usage
+## Available Scripts
 
-The current application flow is:
-
-1. Sign in to TestPilot.
-2. Open the workspace.
-3. Connect a GitHub account.
-4. Authorize TestPilot through GitHub OAuth.
-5. Browse repositories available to the authenticated GitHub account.
-6. Select a repository.
-7. Connect the repository to TestPilot.
-8. TestPilot persists the repository connection for the application user.
-
-The repository analysis and automated testing workflow builds on this foundation.
-
-## Project Structure
-
-```text
-TestPilot/
-├── app/
-│   ├── api/
-│   │   ├── github/
-│   │   ├── repositories/
-│   │   └── users/
-│   ├── workspace/
-│   └── provider.tsx
-│
-├── components/
-│   └── custom/
-│
-├── context/
-│
-├── db/
-│   ├── index.ts
-│   └── schema.ts
-│
-├── public/
-│
-└── docs/
+```bash
+npm run dev       # start the development server
+npm run build     # create a production build
+npm run start     # run the production build
+npm run lint      # run lint checks
+npm run db:generate
+npm run db:push
+npm run db:studio
 ```
 
-The project uses the Next.js App Router. Application-specific UI is organized under `components/`, database access under `db/`, and backend endpoints under `app/api/`.
+## Application Flow
+
+The typical workflow is:
+
+1. sign in through Clerk
+2. connect a GitHub account
+3. authorize repository access
+4. select a repository for analysis
+5. inspect repository context and generated application surfaces
+6. generate high-value test cases
+7. execute tests in a browser environment
+8. review execution logs, outcomes, and failure details
 
 ## Documentation
 
-Detailed technical documentation is maintained separately from this README.
+Project documentation is organized in the `docs/` folder and should be treated as the technical reference for deeper implementation details.
 
-| Document | Description |
-|---|---|
-| `docs/architecture.md` | System architecture and component interactions |
-| `docs/authentication.md` | Clerk authentication and GitHub OAuth |
-| `docs/database.md` | Database schema, relationships, and persistence |
-| `docs/api.md` | Backend API reference |
-| `docs/repository-ingestion.md` | Repository tree and source-code ingestion |
-| `docs/test-generation.md` | AI test-generation pipeline |
-| `docs/test-execution.md` | Browser-based test execution |
-| `docs/insights.md` | Test-result analysis and AI-generated insights |
+| Document | Purpose |
+| --- | --- |
+| `docs/api.md` | API route and backend contract reference |
+| `docs/authentication.md` | Clerk and GitHub auth flow |
+| `docs/database.md` | schema design and database usage |
+| `docs/repository-ingestion.md` | repository analysis and ingestion process |
+| `docs/test-generation.md` | AI-driven test generation workflow |
+| `docs/test-execution.md` | browser-based execution process |
 
-These documents will be added and expanded as the corresponding functionality is implemented.
+## Security Notes
 
-## Security
+This application handles authentication, access tokens, and source repository data. Follow these practices:
 
-TestPilot handles authentication credentials and access to source-code repositories, so security is an important part of the system design.
+- keep secrets in environment variables or secure secret management
+- avoid logging sensitive tokens or credentials
+- keep GitHub OAuth tokens server-side
+- validate access control on sensitive routes
+- review AI ingestion of repository content before production rollout
 
-Current measures include:
+## Status
 
-- GitHub OAuth instead of collecting GitHub passwords
+This project is in active product development. Core workflows are being built around repository analysis, GitHub integration, AI-generated testing, and browser execution.
+
+## License
+
+This project does not currently declare a license in the repository root. Add an appropriate license file before production or public distribution.
 - Server-side handling of the GitHub access token
 - `httpOnly` cookie storage for the GitHub token
 - Clerk-managed application authentication
