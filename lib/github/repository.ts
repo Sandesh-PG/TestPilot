@@ -13,6 +13,8 @@ export type RepositoryTreeResult = {
     tree: RepositoryTreeItem[];
 };
 
+const MAX_TREE_ITEMS = 20_000;
+
 function normalizeTreeItem(item: unknown): RepositoryTreeItem | null {
     if (!item || typeof item !== 'object') {
         return null;
@@ -68,6 +70,7 @@ export async function getRepositoryTree({
 
     const response = await fetch(url, {
         method: 'GET',
+        signal: AbortSignal.timeout(15_000),
         headers: {
             Authorization: `Bearer ${githubToken}`,
             Accept: 'application/vnd.github+json',
@@ -91,6 +94,10 @@ export async function getRepositoryTree({
     const payload = (await response.json()) as {
         tree?: unknown[];
     };
+
+    if (Array.isArray(payload.tree) && payload.tree.length > MAX_TREE_ITEMS) {
+        throw new Error('Repository tree is too large');
+    }
 
     const tree = Array.isArray(payload.tree)
         ? payload.tree

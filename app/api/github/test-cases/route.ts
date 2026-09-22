@@ -1,92 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
-import { currentUser } from "@clerk/nextjs/server";
-import { cookies } from "next/headers";
 import { and, eq } from "drizzle-orm";
 
-import { db, repositories, testCases, users } from "@/db";
+import { db, repositories, testCases } from "@/db";
 import { assembleRepositoryContext } from "@/lib/repository/context";
 import { analyzeRepositoryContext } from "@/lib/ai/repositoryAnalyzer";
 import { generateTestCases } from "@/lib/ai/testGenerator";
+import {
+    enforceRateLimit,
+    getSecurityErrorStatus,
+    isSecurityError,
+    readGitHubQuery,
+    requireConnectedRepositoryAccess,
+} from "@/lib/security/githubAccess";
 
 export async function GET(req: NextRequest) {
-    const { searchParams } = new URL(req.url);
-
-    const owner = searchParams.get("owner");
-    const repo = searchParams.get("repo");
-    const branch = searchParams.get("branch");
-
-    if (!owner || !repo || !branch) {
-        return NextResponse.json(
-            { error: "owner, repo, and branch are required" },
-            { status: 400 }
-        );
-    }
-
-    const trimmedOwner = owner.trim();
-    const trimmedRepo = repo.trim();
-    const trimmedBranch = branch.trim();
-
-    if (!trimmedOwner || !trimmedRepo || !trimmedBranch) {
-        return NextResponse.json(
-            { error: "owner, repo, and branch are required" },
-            { status: 400 }
-        );
-    }
-
     try {
-        // ------------------------------------------------------------
-        // 1. Authenticate with Clerk
-        // ------------------------------------------------------------
-        const user = await currentUser();
-
-        if (!user) {
-            return NextResponse.json(
-                { error: "Unauthorized" },
-                { status: 401 }
-            );
-        }
+        const { owner: trimmedOwner, repo: trimmedRepo, branch: trimmedBranch } = readGitHubQuery(req, { branch: true });
+        const applicationUserId = Number(await requireConnectedRepositoryAccess(trimmedOwner, trimmedRepo));
+        enforceRateLimit(`github:test-cases:${applicationUserId}`, 5);
 
         // ------------------------------------------------------------
-        // 2. Verify GitHub authentication
-        // ------------------------------------------------------------
-        const cookieStore = await cookies();
-        const githubToken = cookieStore.get("github_token")?.value;
-
-        if (!githubToken) {
-            return NextResponse.json(
-                { error: "Missing GitHub auth token" },
-                { status: 401 }
-            );
-        }
-
-        // ------------------------------------------------------------
-        // 3. Resolve the application user
-        // ------------------------------------------------------------
-        const [applicationUser] = await db
-            .select()
-            .from(users)
-            .where(eq(users.clerkId, user.id))
-            .limit(1);
-
-        if (!applicationUser) {
-            return NextResponse.json(
-                {
-                    error:
-                        "User account is not synchronized with the application database",
-                },
-                { status: 403 }
-            );
-        }
-
-        // ------------------------------------------------------------
-        // 4. Find the connected repository owned by this user
+        // 3. Find the connected repository owned by this user
         // ------------------------------------------------------------
         const [repository] = await db
             .select()
             .from(repositories)
             .where(
                 and(
-                    eq(repositories.userId, applicationUser.id),
+                    eq(repositories.userId, applicationUserId),
                     eq(repositories.owner, trimmedOwner),
                     eq(repositories.name, trimmedRepo)
                 )
@@ -104,7 +45,7 @@ export async function GET(req: NextRequest) {
         }
 
         // ------------------------------------------------------------
-        // 5. Build repository context
+        // 4. Build repository context
         // ------------------------------------------------------------
         const context = await assembleRepositoryContext({
             owner: trimmedOwner,
@@ -113,12 +54,12 @@ export async function GET(req: NextRequest) {
         });
 
         // ------------------------------------------------------------
-        // 6. Analyze repository
+        // 5. Analyze repository
         // ------------------------------------------------------------
         const analysis = analyzeRepositoryContext(context);
 
         // ------------------------------------------------------------
-        // 7. Generate evidence-grounded test cases
+        // 6. Generate evidence-grounded test cases
         // ------------------------------------------------------------
         const generated = await generateTestCases(context, analysis);
 
@@ -135,7 +76,7 @@ export async function GET(req: NextRequest) {
         }
 
         // ------------------------------------------------------------
-        // 8. Persist generated test cases
+        // 7. Persist generated test cases
         //
         // Avoid inserting the same generated test repeatedly.
         // A test is considered a duplicate when the repository,
@@ -182,7 +123,7 @@ export async function GET(req: NextRequest) {
         }
 
         // ------------------------------------------------------------
-        // 9. Return generated + persisted test cases
+        // 8. Return generated + persisted test cases
         // ------------------------------------------------------------
         return NextResponse.json({
             ...generated,
@@ -190,36 +131,26 @@ export async function GET(req: NextRequest) {
             testCases: persistedTestCases,
         });
     } catch (error) {
-        const message =
-            error instanceof Error
-                ? error.message
-                : "GitHub API failure";
-
-        if (message === "Missing GitHub auth token") {
+        const securityStatus = getSecurityErrorStatus(error);
+        if (securityStatus !== null) {
             return NextResponse.json(
-                { error: message },
-                { status: 401 }
+                { error: isSecurityError(error) ? error.message : "Too many requests" },
+                { status: securityStatus }
             );
         }
 
+        const message = error instanceof Error ? error.message : "";
         if (message === "GitHub token is unauthorized") {
-            return NextResponse.json(
-                { error: message },
-                { status: 401 }
-            );
+            return NextResponse.json({ error: "GitHub authorization is invalid" }, { status: 401 });
         }
-
         if (message === "Repository not found") {
-            return NextResponse.json(
-                { error: message },
-                { status: 404 }
-            );
+            return NextResponse.json({ error: "Repository not found" }, { status: 404 });
         }
 
-        console.error("[TEST CASE GENERATION]", error);
+        console.error("[TEST CASE GENERATION] request failed");
 
         return NextResponse.json(
-            { error: message },
+            { error: "Unable to generate test cases" },
             { status: 502 }
         );
     }

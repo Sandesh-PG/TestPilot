@@ -1,4 +1,8 @@
 import { getRepositoryContext, type RepositoryFileContent } from '@/lib/github/fileContent';
+import {
+    MAX_REPOSITORY_CONTEXT_BYTES,
+    MAX_REPOSITORY_CONTEXT_FILES,
+} from '@/lib/security/content';
 
 export type RepositoryFile = {
     path: string;
@@ -207,13 +211,28 @@ export async function assembleRepositoryContext({
         .map((file) => normalizeLoadedFile(file))
         .filter((file): file is RepositoryFile => file !== null);
 
+    if (loadedFiles.length > MAX_REPOSITORY_CONTEXT_FILES) {
+        loadedFiles.length = MAX_REPOSITORY_CONTEXT_FILES;
+    }
+
     const packageJsonFile = loadedFiles.find((file) => normalizePath(file.path).toLowerCase() === 'package.json');
     const packageManager = packageJsonFile ? inferPackageManagerFromPackageJson(packageJsonFile.content) : undefined;
 
     const projectType = detectProjectType(loadedFiles);
     const primaryLanguage = detectPrimaryLanguage(loadedFiles) ?? (projectType === 'node' ? 'javascript' : undefined);
 
-    const totalSize = loadedFiles.reduce((sum, file) => sum + (typeof file.size === 'number' ? file.size : file.content.length), 0);
+    const boundedFiles: RepositoryFile[] = [];
+    let totalSize = 0;
+
+    for (const file of loadedFiles) {
+        const fileSize = typeof file.size === 'number' ? file.size : file.content.length;
+        if (totalSize + fileSize > MAX_REPOSITORY_CONTEXT_BYTES) {
+            break;
+        }
+
+        boundedFiles.push(file);
+        totalSize += fileSize;
+    }
 
     const [repositoryOwner, repositoryName] = repositoryFilesResult.repository.split('/') as [string, string];
 
@@ -227,10 +246,10 @@ export async function assembleRepositoryContext({
             primaryLanguage,
             packageManager,
         },
-        files: loadedFiles,
+        files: boundedFiles,
         summary: {
             totalFiles: repositoryFilesResult.summary.totalFiles,
-            loadedFiles: repositoryFilesResult.summary.loadedFiles,
+            loadedFiles: boundedFiles.length,
             skippedFiles: repositoryFilesResult.summary.skippedFiles,
             totalSize,
         },

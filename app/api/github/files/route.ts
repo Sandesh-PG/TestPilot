@@ -1,43 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { getRepositoryTree } from '@/lib/github/repository';
 import { filterRepositoryFiles } from '@/lib/github/fileFilter';
 import { getRepositoryFiles } from '@/lib/github/fileContent';
+import {
+    enforceRateLimit,
+    getSecurityErrorStatus,
+    isSecurityError,
+    readGitHubQuery,
+    requireConnectedRepositoryAccess,
+} from '@/lib/security/githubAccess';
 
 export async function GET(req: NextRequest) {
-    const { searchParams } = new URL(req.url);
-    const owner = searchParams.get('owner');
-    const repo = searchParams.get('repo');
-    const branch = searchParams.get('branch');
-
-    if (!owner || !repo || !branch) {
-        return NextResponse.json(
-            { error: 'owner, repo, and branch are required' },
-            { status: 400 }
-        );
-    }
-
-    const trimmedOwner = owner.trim();
-    const trimmedRepo = repo.trim();
-    const trimmedBranch = branch.trim();
-
-    if (!trimmedOwner || !trimmedRepo || !trimmedBranch) {
-        return NextResponse.json(
-            { error: 'owner, repo, and branch are required' },
-            { status: 400 }
-        );
-    }
-
     try {
-        const cookieStore = await cookies();
-        const githubToken = cookieStore.get('github_token')?.value;
-
-        if (!githubToken) {
-            return NextResponse.json(
-                { error: 'Missing GitHub auth token' },
-                { status: 401 }
-            );
-        }
+        const { owner: trimmedOwner, repo: trimmedRepo, branch: trimmedBranch, path: trimmedPath } = readGitHubQuery(req, { branch: true });
+        const userKey = await requireConnectedRepositoryAccess(trimmedOwner, trimmedRepo);
+        enforceRateLimit(`github:files:${userKey}`, 60);
 
         const tree = await getRepositoryTree({
             owner: trimmedOwner,
@@ -47,29 +24,53 @@ export async function GET(req: NextRequest) {
 
         const filteredFiles = filterRepositoryFiles(tree.tree);
 
+        // If a specific path is provided, retrieve only that file.
+        const selectedFiles = trimmedPath
+            ? filteredFiles.filter(
+                  (file) => file.path === trimmedPath
+              )
+            : filteredFiles;
+
+        if (trimmedPath && selectedFiles.length === 0) {
+            return NextResponse.json(
+                { error: 'File not found in filtered repository files' },
+                { status: 404 }
+            );
+        }
+
         const contextualFiles = await getRepositoryFiles({
             owner: trimmedOwner,
             repo: trimmedRepo,
             branch: trimmedBranch,
-            files: filteredFiles,
+            files: selectedFiles,
         });
 
         return NextResponse.json(contextualFiles);
     } catch (error) {
-        const message = error instanceof Error ? error.message : 'GitHub API failure';
+        const message =
+            error instanceof Error
+                ? error.message
+                : 'GitHub API failure';
 
-        if (message === 'Missing GitHub auth token') {
-            return NextResponse.json({ error: message }, { status: 401 });
+        const securityStatus = getSecurityErrorStatus(error);
+        if (securityStatus !== null) {
+            return NextResponse.json(
+                { error: isSecurityError(error) ? error.message : 'Too many requests' },
+                { status: securityStatus }
+            );
         }
 
         if (message === 'GitHub token is unauthorized') {
-            return NextResponse.json({ error: message }, { status: 401 });
+            return NextResponse.json({ error: 'GitHub authorization is invalid' }, { status: 401 });
         }
 
         if (message === 'Repository not found') {
-            return NextResponse.json({ error: message }, { status: 404 });
+            return NextResponse.json(
+                { error: message },
+                { status: 404 }
+            );
         }
 
-        return NextResponse.json({ error: message }, { status: 502 });
+        return NextResponse.json({ error: 'Unable to load file content' }, { status: 502 });
     }
 }

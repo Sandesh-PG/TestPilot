@@ -2,6 +2,11 @@ import { cookies } from 'next/headers';
 import type { RepositoryTreeItem } from './repository';
 import { filterRepositoryFiles } from './fileFilter';
 import { getRepositoryTree } from './repository';
+import {
+    MAX_REPOSITORY_CONTEXT_BYTES,
+    MAX_REPOSITORY_CONTEXT_FILES,
+    redactSensitiveContent,
+} from '@/lib/security/content';
 
 export const MAX_FILE_SIZE_BYTES = 1_000_000;
 export const MAX_CONCURRENT_FILE_REQUESTS = 5;
@@ -63,6 +68,7 @@ async function fetchFileContentFromGitHub({
 
     const response = await fetch(url, {
         method: 'GET',
+        signal: AbortSignal.timeout(15_000),
         headers: getGitHubRequestHeaders(token),
     });
 
@@ -163,7 +169,7 @@ async function fetchFileContentFromGitHub({
             path,
             sha,
             size,
-            content: decoded,
+            content: redactSensitiveContent(decoded),
         };
     } catch {
         return {
@@ -226,11 +232,13 @@ export async function getRepositoryFiles({
     repo,
     branch,
     files,
+    limitContext = false,
 }: {
     owner: string;
     repo: string;
     branch: string;
     files: RepositoryTreeItem[];
+    limitContext?: boolean;
 }): Promise<RepositoryFilesResult> {
     const trimmedOwner = owner.trim();
     const trimmedRepo = repo.trim();
@@ -240,7 +248,25 @@ export async function getRepositoryFiles({
         throw new Error('owner, repo, and branch are required');
     }
 
-    const validFiles = files.filter((file) => file.type === 'blob' && !isSecretFilePath(file.path));
+    const validFiles: RepositoryTreeItem[] = [];
+    let selectedBytes = 0;
+
+    for (const file of files) {
+        if (file.type !== 'blob' || isSecretFilePath(file.path)) {
+            continue;
+        }
+
+        const fileSize = typeof file.size === 'number' ? file.size : 0;
+        if (limitContext && (
+            validFiles.length >= MAX_REPOSITORY_CONTEXT_FILES ||
+            (fileSize > 0 && selectedBytes + fileSize > MAX_REPOSITORY_CONTEXT_BYTES)
+        )) {
+            break;
+        }
+
+        validFiles.push(file);
+        selectedBytes += fileSize;
+    }
 
     const results: Array<RepositoryFileContent | null> = new Array(validFiles.length).fill(null);
     let nextIndex = 0;
@@ -313,5 +339,6 @@ export async function getRepositoryContext({
         repo: result.repository.split('/')[1],
         branch: result.branch,
         files: filteredFiles,
+        limitContext: true,
     });
 }

@@ -531,9 +531,9 @@ export default function WorkSpaceBody() {
     );
 
     return (
-        <main className="min-h-[calc(100vh-73px)] bg-zinc-950 text-zinc-100 flex items-center justify-center p-4 md:p-8">
-            <div className="w-full max-w-4xl space-y-8">
-                <div className="flex items-center justify-between mb-6">
+        <main className="min-h-[calc(100vh-73px)] bg-zinc-950 text-zinc-100 p-4 sm:p-6 lg:p-8">
+            <div className="mx-auto w-full max-w-[1500px] space-y-8">
+                <div className="mb-6 flex items-center justify-between border-b border-zinc-800/80 pb-5">
                     <h1 className="text-sm font-bold tracking-widest text-zinc-400 uppercase">
                         Workspace
                     </h1>

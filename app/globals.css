@@ -131,3 +131,36 @@
     @apply bg-background text-foreground;
   }
 }
+
+.repo-inspection-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #3f3f46 #18181b;
+  scrollbar-gutter: stable;
+  scroll-behavior: smooth;
+}
+
+.repo-inspection-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.repo-inspection-scrollbar::-webkit-scrollbar-track {
+  background: #18181b;
+  border-radius: 9999px;
+}
+
+.repo-inspection-scrollbar::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border: 2px solid #18181b;
+  border-radius: 9999px;
+}
+
+.repo-inspection-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #52525b;
+}
+
+.repo-inspection-scrollbar::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}

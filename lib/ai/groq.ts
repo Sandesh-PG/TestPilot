@@ -54,6 +54,7 @@ export async function callGroq<T = unknown>(
         `${GROQ_CONFIG.baseUrl}/chat/completions`,
         {
             method: 'POST',
+            signal: AbortSignal.timeout(30_000),
             headers: {
                 Authorization: `Bearer ${apiKey}`,
                 'Content-Type': 'application/json',
@@ -79,9 +80,6 @@ export async function callGroq<T = unknown>(
     );
 
     if (!response.ok) {
-        const errorText = await response
-            .text()
-            .catch(() => '');
         const status = response.status;
 
         if (status === 401 || status === 403) {
@@ -96,11 +94,7 @@ export async function callGroq<T = unknown>(
             throw new Error('Groq server error');
         }
 
-        throw new Error(
-            `Groq request failed (${status}): ${
-                errorText || response.statusText
-            }`
-        );
+        throw new Error(`Groq request failed (${status})`);
     }
 
     const data = (await response.json()) as {
@@ -122,12 +116,7 @@ export async function callGroq<T = unknown>(
     try {
         return JSON.parse(content) as T;
     } catch {
-        throw new Error(
-            `Groq returned invalid JSON: ${content.slice(
-                0,
-                1000
-            )}`
-        );
+        throw new Error('Groq returned invalid JSON');
     }
 }
 
