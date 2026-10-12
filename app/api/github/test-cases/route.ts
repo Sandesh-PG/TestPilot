@@ -111,6 +111,7 @@ export async function GET(req: NextRequest) {
                 .insert(testCases)
                 .values({
                     repositoryId: repository.id,
+                    projectId: String(repository.id),
                     title: generatedTest.title,
                     description: generatedTest.description,
                     type: generatedTest.type,

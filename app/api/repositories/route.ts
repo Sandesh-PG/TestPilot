@@ -1,4 +1,4 @@
-import { db, repositories, users } from "@/db";
+import { db, projects, repositories, users } from "@/db";
 import { currentUser } from "@clerk/nextjs/server";
 import { and, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
@@ -202,6 +202,21 @@ export async function POST(req: NextRequest) {
             .returning();
 
         const insertedRepository = insertedRepositories[0];
+
+        if (insertedRepository && applicationUser.clerkId) {
+            await db
+                .insert(projects)
+                .values({
+                    id: String(insertedRepository.id),
+                    userId: applicationUser.clerkId,
+                    repoName: insertedRepository.name,
+                    repoUrl: insertedRepository.url,
+                    defaultBranch: insertedRepository.defaultBranch || 'main',
+                    environmentUrl: insertedRepository.targetEnvironmentUrl || 'http://localhost:3000',
+                    createdAt: insertedRepository.connectedAt || new Date(),
+                })
+                .onConflictDoNothing();
+        }
 
         return NextResponse.json(
             { repository: insertedRepository },

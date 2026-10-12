@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { and, eq, or } from "drizzle-orm";
 import { auth, currentUser } from "@clerk/nextjs/server";
 
-import { db, repositories, users } from "@/db";
+import { db, projects, repositories, testCases, users } from "@/db";
 
 type RouteContext = {
     params: Promise<{
@@ -54,27 +54,83 @@ export async function GET(
         const { id } = await params;
         const parsedId = Number(id);
 
-        if (!Number.isInteger(parsedId) || parsedId <= 0) {
-            return NextResponse.json({ error: "Invalid repository ID" }, { status: 400 });
-        }
+        let repo = null;
 
-        const [repo] = await db
-            .select()
-            .from(repositories)
-            .where(
-                and(
-                    eq(repositories.userId, appUser.id),
-                    or(
-                        eq(repositories.id, parsedId),
-                        eq(repositories.githubRepoId, parsedId)
+        if (Number.isInteger(parsedId) && parsedId > 0) {
+            const [foundRepo] = await db
+                .select()
+                .from(repositories)
+                .where(
+                    and(
+                        eq(repositories.userId, appUser.id),
+                        or(
+                            eq(repositories.id, parsedId),
+                            eq(repositories.githubRepoId, parsedId)
+                        )
                     )
                 )
-            )
-            .limit(1);
+                .limit(1);
+            repo = foundRepo ?? null;
+        }
+
+        // If not found by integer, check projects table
+        if (!repo) {
+            const [foundProj] = await db
+                .select()
+                .from(projects)
+                .where(eq(projects.id, id))
+                .limit(1);
+
+            if (foundProj) {
+                const [matchingRepo] = await db
+                    .select()
+                    .from(repositories)
+                    .where(
+                        and(
+                            eq(repositories.userId, appUser.id),
+                            eq(repositories.name, foundProj.repoName)
+                        )
+                    )
+                    .limit(1);
+
+                if (matchingRepo) {
+                    repo = matchingRepo;
+                } else {
+                    const fallbackId = Number(foundProj.id) || 1;
+                    repo = {
+                        id: fallbackId,
+                        githubRepoId: fallbackId,
+                        name: foundProj.repoName,
+                        fullName: foundProj.repoName,
+                        owner: foundProj.repoName.split('/')[0] || 'owner',
+                        url: foundProj.repoUrl || '',
+                        defaultBranch: foundProj.defaultBranch || 'main',
+                        isPrivate: false,
+                        description: null,
+                        language: null,
+                        connectedAt: foundProj.createdAt,
+                        lastSync: null,
+                        targetEnvironmentUrl: foundProj.environmentUrl || 'http://localhost:3000',
+                    };
+                }
+            }
+        }
 
         if (!repo) {
             return NextResponse.json({ error: "Repository not found" }, { status: 404 });
         }
+
+        // Fetch persisted test cases for this repository or project
+        const conditions = [eq(testCases.projectId, id)];
+        if (repo.id) {
+            conditions.push(eq(testCases.repositoryId, repo.id));
+            conditions.push(eq(testCases.projectId, String(repo.id)));
+        }
+
+        const repoTests = await db
+            .select()
+            .from(testCases)
+            .where(or(...conditions));
 
         return NextResponse.json({
             repository: {
@@ -86,6 +142,7 @@ export async function GET(
                 targetEnvironmentUrl: repo.targetEnvironmentUrl ?? "http://localhost:3000",
                 defaultBranch: repo.defaultBranch,
             },
+            testCases: repoTests,
         });
     } catch (error) {
         console.error("[GET /api/repositories/:id]", error);
@@ -158,6 +215,12 @@ export async function PATCH(
             })
             .where(eq(repositories.id, existingRepo.id))
             .returning();
+
+        // Also sync updated environmentUrl to projects table
+        await db
+            .update(projects)
+            .set({ environmentUrl: cleanUrl })
+            .where(or(eq(projects.id, String(existingRepo.id)), eq(projects.id, id)));
 
         return NextResponse.json({
             success: true,

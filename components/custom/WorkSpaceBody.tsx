@@ -175,7 +175,7 @@ const mapPersistedRepository = (repository: Partial<PersistedRepository> | Recor
     };
 };
 
-export default function WorkSpaceBody() {
+export default function WorkSpaceBody({ projectId }: { projectId?: string } = {}) {
     const { userDetail } = useContext(UserDetailContext);
     const [repositories, setRepositories] = useState<GitHubRepository[]>([]);
     const [selectedRepositoryId, setSelectedRepositoryId] = useState<number | null>(null);
@@ -199,7 +199,11 @@ export default function WorkSpaceBody() {
             setErrorMessage(null);
 
             try {
-                const response = await fetch('/api/repositories', {
+                const endpoint = projectId
+                    ? `/api/repositories/${encodeURIComponent(projectId)}`
+                    : '/api/repositories';
+
+                const response = await fetch(endpoint, {
                     method: 'GET',
                 });
 
@@ -207,7 +211,7 @@ export default function WorkSpaceBody() {
                     throw new Error(`Repository lookup failed with status ${response.status}`);
                 }
 
-                const data: { repository?: PersistedRepository | null } = await response.json();
+                const data: { repository?: PersistedRepository | null; testCases?: unknown[] } = await response.json();
                 const persistedRepository = data.repository ?? null;
                 const mappedRepository = mapPersistedRepository(persistedRepository);
 
@@ -222,6 +226,10 @@ export default function WorkSpaceBody() {
                         setRepositoryError('The stored workspace repository could not be loaded.');
                     }
                     return;
+                }
+
+                if (Array.isArray(data.testCases)) {
+                    (mappedRepository as unknown as { testCases?: unknown[] }).testCases = data.testCases;
                 }
 
                 setConnectedRepository(mappedRepository);
@@ -242,7 +250,7 @@ export default function WorkSpaceBody() {
         return () => {
             isMounted = false;
         };
-    }, []);
+    }, [projectId]);
 
     useEffect(() => {
         if (repositoryState !== 'not-connected') {

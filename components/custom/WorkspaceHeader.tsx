@@ -34,6 +34,11 @@ const WorkspaceHeader = () => {
             <nav className="hidden md:block">
                 <ul className="flex gap-8 text-sm font-medium text-slate-400">
                     <li>
+                        <Link href="/dashboard" className="hover:text-white transition-colors">
+                            Dashboard
+                        </Link>
+                    </li>
+                    <li>
                         <Link href="/workspace" className="hover:text-white transition-colors">
                             Workspace
                         </Link>

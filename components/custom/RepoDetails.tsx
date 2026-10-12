@@ -41,6 +41,7 @@ type RepoDetailsProps = {
         updated_at: string;
         branchCount?: number;
         testCount?: number;
+        testCases?: GeneratedTestCase[];
     };
     onDisconnect: () => void;
 };
@@ -356,6 +357,33 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
             controller.abort();
         };
     }, [repo.name, repo.owner.login, selectedBranch, selectedFile]);
+
+    // Load persisted test cases for this repository on mount
+    useEffect(() => {
+        if (Array.isArray(repo.testCases) && repo.testCases.length > 0) {
+            setGeneratedTestCases(repo.testCases);
+            return;
+        }
+
+        const repoIdentifier = repo.databaseId || repo.id;
+        if (!repoIdentifier) return;
+
+        const loadPersistedTests = async () => {
+            try {
+                const res = await fetch(`/api/repositories/${repoIdentifier}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (Array.isArray(data.testCases) && data.testCases.length > 0) {
+                        setGeneratedTestCases(data.testCases);
+                    }
+                }
+            } catch {
+                // non-blocking
+            }
+        };
+
+        void loadPersistedTests();
+    }, [repo.databaseId, repo.id, repo.testCases]);
 
     // Load recent executions for this repository on mount
     useEffect(() => {
