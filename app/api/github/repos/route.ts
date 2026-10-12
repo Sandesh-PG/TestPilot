@@ -1,5 +1,11 @@
 import { cookies } from "next/headers";
 import { NextResponse } from 'next/server';
+import {
+    enforceRateLimit,
+    getSecurityErrorStatus,
+    isSecurityError,
+    requireAuthenticatedGitHubUser,
+} from '@/lib/security/githubAccess';
 
 type GitHubOwner = {
     login: string;
@@ -51,20 +57,20 @@ function mapRepository(repository: GitHubRepository): RepositoryResponseItem {
 }
 
 export async function GET() {
-    const cookieStore = await cookies();
-    const githubToken = cookieStore.get('github_token')?.value;
-
-    if (!githubToken) {
-        return NextResponse.json(
-            { error: 'GitHub not connected' },
-            { status: 401 }
-        );
-    }
-
     try {
+        const userKey = await requireAuthenticatedGitHubUser();
+        enforceRateLimit(`github:repos:${userKey}`, 30);
+        const cookieStore = await cookies();
+        const githubToken = cookieStore.get('github_token')?.value;
+
+        if (!githubToken) {
+            return NextResponse.json({ error: 'GitHub not connected' }, { status: 401 });
+        }
+
         const response = await fetch(
             'https://api.github.com/user/repos?affiliation=owner&sort=updated&per_page=100',
             {
+                signal: AbortSignal.timeout(15_000),
                 headers: {
                     Authorization: `Bearer ${githubToken}`,
                     Accept: 'application/vnd.github+json',
@@ -85,7 +91,15 @@ export async function GET() {
         return NextResponse.json({
             repositories: repositories.map(mapRepository),
         });
-    } catch {
+    } catch (error) {
+        const securityStatus = getSecurityErrorStatus(error);
+        if (securityStatus !== null) {
+            return NextResponse.json(
+                { error: isSecurityError(error) ? error.message : 'Too many requests' },
+                { status: securityStatus }
+            );
+        }
+
         return NextResponse.json(
             { error: 'Failed to fetch GitHub repositories' },
             { status: 502 }

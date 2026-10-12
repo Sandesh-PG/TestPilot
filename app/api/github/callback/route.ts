@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
     const code = req.nextUrl.searchParams.get('code');
+    const returnedState = req.nextUrl.searchParams.get('state');
+    const expectedState = req.cookies.get('github_oauth_state')?.value;
 
-    if (!code) {
+    if (!code || !returnedState || !expectedState || returnedState !== expectedState) {
         return NextResponse.redirect(new URL('/workspace?error=missing_code', req.url));
     }
 
@@ -17,6 +19,7 @@ export async function GET(req: NextRequest) {
 
     const res = await fetch('https://github.com/login/oauth/access_token', {
         method: 'POST',
+        signal: AbortSignal.timeout(15_000),
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
             Accept: 'application/json',
@@ -41,6 +44,14 @@ export async function GET(req: NextRequest) {
     }
 
     const response = NextResponse.redirect(new URL('/workspace', req.url));
+
+    response.cookies.set('github_oauth_state', '', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/api/github/callback',
+        maxAge: 0,
+    });
 
     response.cookies.set('github_token', token, {
         httpOnly: true,

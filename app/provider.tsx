@@ -31,7 +31,7 @@ const Provider = ({ children, }: Readonly<{
 
     return (
         <div>
-            <UserDetailContext.Provider value={{ UserDetail, setUserDetail }}>
+            <UserDetailContext.Provider value={{ UserDetail, userDetail: UserDetail, setUserDetail }}>
                 {children}
             </UserDetailContext.Provider>
         </div>

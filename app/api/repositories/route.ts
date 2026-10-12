@@ -1,4 +1,4 @@
-import { db, repositories, users } from "@/db";
+import { db, projects, repositories, users } from "@/db";
 import { currentUser } from "@clerk/nextjs/server";
 import { and, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
@@ -21,6 +21,24 @@ type CreateRepositoryBody = {
     repository?: IncomingRepository;
 };
 
+async function getApplicationUser() {
+    const user = await currentUser();
+
+    if (!user?.primaryEmailAddress?.emailAddress) {
+        return null;
+    }
+
+    const email = user.primaryEmailAddress.emailAddress;
+
+    const applicationUsers = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, email))
+        .limit(1);
+
+    return applicationUsers[0] ?? null;
+}
+
 function isNonEmptyString(value: unknown): value is string {
     return typeof value === 'string' && value.trim().length > 0;
 }
@@ -33,26 +51,88 @@ function isDuplicateKeyError(error: unknown) {
     return typeof error === 'object' && error !== null && 'code' in error && (error as { code?: string }).code === '23505';
 }
 
-export async function POST(req: NextRequest) {
-    try {
-        const user = await currentUser();
+function serializeRepository(repository: (typeof repositories.$inferSelect)) {
+    return {
+        id: repository.githubRepoId,
+        databaseId: repository.id,
+        name: repository.name,
+        full_name: repository.fullName,
+        owner: {
+            login: repository.owner,
+        },
+        html_url: repository.url,
+        default_branch: repository.defaultBranch,
+        private: repository.isPrivate,
+        description: repository.description ?? null,
+        language: repository.language ?? null,
+        targetEnvironmentUrl: repository.targetEnvironmentUrl ?? 'http://localhost:3000',
+        updated_at: repository.connectedAt ? repository.connectedAt.toISOString() : new Date().toISOString(),
+        connected_at: repository.connectedAt ? repository.connectedAt.toISOString() : null,
+        last_sync: repository.lastSync ? repository.lastSync.toISOString() : null,
+    };
+}
 
-        if (!user?.primaryEmailAddress?.emailAddress) {
+export async function GET() {
+    try {
+        const applicationUser = await getApplicationUser();
+
+        if (!applicationUser) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const email = user.primaryEmailAddress.emailAddress;
-
-        const applicationUsers = await db
+        const persistedRepositories = await db
             .select()
-            .from(users)
-            .where(eq(users.email, email))
-            .limit(1);
+            .from(repositories)
+            .where(eq(repositories.userId, applicationUser.id));
 
-        const applicationUser = applicationUsers[0];
+        const connectedRepository = persistedRepositories[0] ?? null;
+
+        return NextResponse.json({
+            repository: connectedRepository ? serializeRepository(connectedRepository) : null,
+        });
+    } catch (error) {
+        console.error('Error in GET /api/repositories:', error);
+
+        return NextResponse.json(
+            { error: 'Internal Server Error' },
+            { status: 500 }
+        );
+    }
+}
+
+export async function DELETE() {
+    try {
+        const applicationUser = await getApplicationUser();
 
         if (!applicationUser) {
-            return NextResponse.json({ error: 'Application user not found' }, { status: 404 });
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const deletedRepositories = await db
+            .delete(repositories)
+            .where(eq(repositories.userId, applicationUser.id))
+            .returning();
+
+        return NextResponse.json({
+            deleted: deletedRepositories.length > 0,
+            repository: null,
+        });
+    } catch (error) {
+        console.error('Error in DELETE /api/repositories:', error);
+
+        return NextResponse.json(
+            { error: 'Internal Server Error' },
+            { status: 500 }
+        );
+    }
+}
+
+export async function POST(req: NextRequest) {
+    try {
+        const applicationUser = await getApplicationUser();
+
+        if (!applicationUser) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         let body: CreateRepositoryBody;
@@ -122,6 +202,21 @@ export async function POST(req: NextRequest) {
             .returning();
 
         const insertedRepository = insertedRepositories[0];
+
+        if (insertedRepository && applicationUser.clerkId) {
+            await db
+                .insert(projects)
+                .values({
+                    id: String(insertedRepository.id),
+                    userId: applicationUser.clerkId,
+                    repoName: insertedRepository.name,
+                    repoUrl: insertedRepository.url,
+                    defaultBranch: insertedRepository.defaultBranch || 'main',
+                    environmentUrl: insertedRepository.targetEnvironmentUrl || 'http://localhost:3000',
+                    createdAt: insertedRepository.connectedAt || new Date(),
+                })
+                .onConflictDoNothing();
+        }
 
         return NextResponse.json(
             { repository: insertedRepository },

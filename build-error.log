@@ -1,0 +1,265 @@
+
+> TestPilot@0.1.0 build
+> next build
+
+▲ Next.js 16.2.10 (Turbopack)
+- Environments: .env
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 5.0s
+  Running TypeScript ...
+It looks like you're trying to use TypeScript but do not have the required package(s) installed.
+Installing dependencies
+
+If you are not trying to use TypeScript, please remove the tsconfig.json file from your package root (and any TypeScript files in your app and pages directories).
+
+
+Installing devDependencies (npm):
+- typescript
+
+npm warn ERESOLVE overriding peer dependency
+npm warn While resolving: eslint-plugin-import@2.32.0
+npm warn Found: eslint@10.7.0
+npm warn node_modules/eslint
+npm warn   peer eslint@"^6.0.0 || ^7.0.0 || >=8.0.0" from @eslint-community/eslint-utils@4.9.1
+npm warn   node_modules/@eslint-community/eslint-utils
+npm warn     @eslint-community/eslint-utils@"^4.8.0" from eslint@10.7.0
+npm warn     1 more (@typescript-eslint/utils)
+npm warn   9 more (eslint-config-next, ...)
+npm warn
+npm warn Could not resolve dependency:
+npm warn peer eslint@"^2 || ^3 || ^4 || ^5 || ^6 || ^7.2.0 || ^8 || ^9" from eslint-plugin-import@2.32.0
+npm warn node_modules/eslint-config-next/node_modules/eslint-plugin-import
+npm warn   eslint-plugin-import@"^2.32.0" from eslint-config-next@16.2.10
+npm warn   node_modules/eslint-config-next
+npm warn   1 more (eslint-import-resolver-typescript)
+npm warn
+npm warn Conflicting peer dependency: eslint@9.39.5
+npm warn node_modules/eslint
+npm warn   peer eslint@"^2 || ^3 || ^4 || ^5 || ^6 || ^7.2.0 || ^8 || ^9" from eslint-plugin-import@2.32.0
+npm warn   node_modules/eslint-config-next/node_modules/eslint-plugin-import
+npm warn     eslint-plugin-import@"^2.32.0" from eslint-config-next@16.2.10
+npm warn     node_modules/eslint-config-next
+npm warn     1 more (eslint-import-resolver-typescript)
+npm warn ERESOLVE overriding peer dependency
+npm warn While resolving: eslint-plugin-jsx-a11y@6.10.2
+npm warn Found: eslint@10.7.0
+npm warn node_modules/eslint
+npm warn   peer eslint@"^6.0.0 || ^7.0.0 || >=8.0.0" from @eslint-community/eslint-utils@4.9.1
+npm warn   node_modules/@eslint-community/eslint-utils
+npm warn     @eslint-community/eslint-utils@"^4.8.0" from eslint@10.7.0
+npm warn     1 more (@typescript-eslint/utils)
+npm warn   9 more (eslint-config-next, ...)
+npm warn
+npm warn Could not resolve dependency:
+npm warn peer eslint@"^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9" from eslint-plugin-jsx-a11y@6.10.2
+npm warn node_modules/eslint-config-next/node_modules/eslint-plugin-jsx-a11y
+npm warn   eslint-plugin-jsx-a11y@"^6.10.0" from eslint-config-next@16.2.10
+npm warn   node_modules/eslint-config-next
+npm warn
+npm warn Conflicting peer dependency: eslint@9.39.5
+npm warn node_modules/eslint
+npm warn   peer eslint@"^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9" from eslint-plugin-jsx-a11y@6.10.2
+npm warn   node_modules/eslint-config-next/node_modules/eslint-plugin-jsx-a11y
+npm warn     eslint-plugin-jsx-a11y@"^6.10.0" from eslint-config-next@16.2.10
+npm warn     node_modules/eslint-config-next
+npm warn ERESOLVE overriding peer dependency
+npm warn While resolving: eslint-plugin-react@7.37.5
+npm warn Found: eslint@10.7.0
+npm warn node_modules/eslint
+npm warn   peer eslint@"^6.0.0 || ^7.0.0 || >=8.0.0" from @eslint-community/eslint-utils@4.9.1
+npm warn   node_modules/@eslint-community/eslint-utils
+npm warn     @eslint-community/eslint-utils@"^4.8.0" from eslint@10.7.0
+npm warn     1 more (@typescript-eslint/utils)
+npm warn   9 more (eslint-config-next, ...)
+npm warn
+npm warn Could not resolve dependency:
+npm warn peer eslint@"^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9.7" from eslint-plugin-react@7.37.5
+npm warn node_modules/eslint-config-next/node_modules/eslint-plugin-react
+npm warn   eslint-plugin-react@"^7.37.0" from eslint-config-next@16.2.10
+npm warn   node_modules/eslint-config-next
+npm warn
+npm warn Conflicting peer dependency: eslint@9.39.5
+npm warn node_modules/eslint
+npm warn   peer eslint@"^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9.7" from eslint-plugin-react@7.37.5
+npm warn   node_modules/eslint-config-next/node_modules/eslint-plugin-react
+npm warn     eslint-plugin-react@"^7.37.0" from eslint-config-next@16.2.10
+npm warn     node_modules/eslint-config-next
+npm warn ERESOLVE overriding peer dependency
+npm warn While resolving: typescript-eslint@8.64.0
+npm warn Found: typescript@7.0.2
+npm warn node_modules/typescript
+npm warn   dev typescript@"7.0.2" from the root project
+npm warn   2 more (eslint-config-next, ts-api-utils)
+npm warn
+npm warn Could not resolve dependency:
+npm warn peer typescript@">=4.8.4 <6.1.0" from typescript-eslint@8.64.0
+npm warn node_modules/eslint-config-next/node_modules/typescript-eslint
+npm warn   typescript-eslint@"^8.46.0" from eslint-config-next@16.2.10
+npm warn   node_modules/eslint-config-next
+npm warn
+npm warn Conflicting peer dependency: typescript@6.0.3
+npm warn node_modules/typescript
+npm warn   peer typescript@">=4.8.4 <6.1.0" from typescript-eslint@8.64.0
+npm warn   node_modules/eslint-config-next/node_modules/typescript-eslint
+npm warn     typescript-eslint@"^8.46.0" from eslint-config-next@16.2.10
+npm warn     node_modules/eslint-config-next
+npm warn ERESOLVE overriding peer dependency
+npm warn While resolving: @typescript-eslint/eslint-plugin@8.64.0
+npm warn Found: typescript@7.0.2
+npm warn node_modules/typescript
+npm warn   dev typescript@"7.0.2" from the root project
+npm warn   2 more (eslint-config-next, ts-api-utils)
+npm warn
+npm warn Could not resolve dependency:
+npm warn peer typescript@">=4.8.4 <6.1.0" from @typescript-eslint/eslint-plugin@8.64.0
+npm warn node_modules/eslint-config-next/node_modules/typescript-eslint/node_modules/@typescript-eslint/eslint-plugin
+npm warn   @typescript-eslint/eslint-plugin@"8.64.0" from typescript-eslint@8.64.0
+npm warn   node_modules/eslint-config-next/node_modules/typescript-eslint
+npm warn
+npm warn Conflicting peer dependency: typescript@6.0.3
+npm warn node_modules/typescript
+npm warn   peer typescript@">=4.8.4 <6.1.0" from @typescript-eslint/eslint-plugin@8.64.0
+npm warn   node_modules/eslint-config-next/node_modules/typescript-eslint/node_modules/@typescript-eslint/eslint-plugin
+npm warn     @typescript-eslint/eslint-plugin@"8.64.0" from typescript-eslint@8.64.0
+npm warn     node_modules/eslint-config-next/node_modules/typescript-eslint
+npm warn ERESOLVE overriding peer dependency
+npm warn While resolving: @typescript-eslint/parser@8.64.0
+npm warn Found: typescript@7.0.2
+npm warn node_modules/typescript
+npm warn   dev typescript@"7.0.2" from the root project
+npm warn   2 more (eslint-config-next, ts-api-utils)
+npm warn
+npm warn Could not resolve dependency:
+npm warn peer typescript@">=4.8.4 <6.1.0" from @typescript-eslint/parser@8.64.0
+npm warn node_modules/eslint-config-next/node_modules/typescript-eslint/node_modules/@typescript-eslint/parser
+npm warn   @typescript-eslint/parser@"8.64.0" from typescript-eslint@8.64.0
+npm warn   node_modules/eslint-config-next/node_modules/typescript-eslint
+npm warn   1 more (@typescript-eslint/eslint-plugin)
+npm warn
+npm warn Conflicting peer dependency: typescript@6.0.3
+npm warn node_modules/typescript
+npm warn   peer typescript@">=4.8.4 <6.1.0" from @typescript-eslint/parser@8.64.0
+npm warn   node_modules/eslint-config-next/node_modules/typescript-eslint/node_modules/@typescript-eslint/parser
+npm warn     @typescript-eslint/parser@"8.64.0" from typescript-eslint@8.64.0
+npm warn     node_modules/eslint-config-next/node_modules/typescript-eslint
+npm warn     1 more (@typescript-eslint/eslint-plugin)
+npm warn ERESOLVE overriding peer dependency
+npm warn While resolving: @typescript-eslint/typescript-estree@8.64.0
+npm warn Found: typescript@7.0.2
+npm warn node_modules/typescript
+npm warn   dev typescript@"7.0.2" from the root project
+npm warn   2 more (eslint-config-next, ts-api-utils)
+npm warn
+npm warn Could not resolve dependency:
+npm warn peer typescript@">=4.8.4 <6.1.0" from @typescript-eslint/typescript-estree@8.64.0
+npm warn node_modules/eslint-config-next/node_modules/typescript-eslint/node_modules/@typescript-eslint/typescript-estree
+npm warn   @typescript-eslint/typescript-estree@"8.64.0" from typescript-eslint@8.64.0
+npm warn   node_modules/eslint-config-next/node_modules/typescript-eslint
+npm warn   3 more (@typescript-eslint/type-utils, ...)
+npm warn
+npm warn Conflicting peer dependency: typescript@6.0.3
+npm warn node_modules/typescript
+npm warn   peer typescript@">=4.8.4 <6.1.0" from @typescript-eslint/typescript-estree@8.64.0
+npm warn   node_modules/eslint-config-next/node_modules/typescript-eslint/node_modules/@typescript-eslint/typescript-estree
+npm warn     @typescript-eslint/typescript-estree@"8.64.0" from typescript-eslint@8.64.0
+npm warn     node_modules/eslint-config-next/node_modules/typescript-eslint
+npm warn     3 more (@typescript-eslint/type-utils, ...)
+npm warn ERESOLVE overriding peer dependency
+npm warn While resolving: @typescript-eslint/utils@8.64.0
+npm warn Found: typescript@7.0.2
+npm warn node_modules/typescript
+npm warn   dev typescript@"7.0.2" from the root project
+npm warn   2 more (eslint-config-next, ts-api-utils)
+npm warn
+npm warn Could not resolve dependency:
+npm warn peer typescript@">=4.8.4 <6.1.0" from @typescript-eslint/utils@8.64.0
+npm warn node_modules/eslint-config-next/node_modules/typescript-eslint/node_modules/@typescript-eslint/utils
+npm warn   @typescript-eslint/utils@"8.64.0" from typescript-eslint@8.64.0
+npm warn   node_modules/eslint-config-next/node_modules/typescript-eslint
+npm warn   2 more (@typescript-eslint/eslint-plugin, @typescript-eslint/type-utils)
+npm warn
+npm warn Conflicting peer dependency: typescript@6.0.3
+npm warn node_modules/typescript
+npm warn   peer typescript@">=4.8.4 <6.1.0" from @typescript-eslint/utils@8.64.0
+npm warn   node_modules/eslint-config-next/node_modules/typescript-eslint/node_modules/@typescript-eslint/utils
+npm warn     @typescript-eslint/utils@"8.64.0" from typescript-eslint@8.64.0
+npm warn     node_modules/eslint-config-next/node_modules/typescript-eslint
+npm warn     2 more (@typescript-eslint/eslint-plugin, @typescript-eslint/type-utils)
+npm warn ERESOLVE overriding peer dependency
+npm warn While resolving: @typescript-eslint/type-utils@8.64.0
+npm warn Found: typescript@7.0.2
+npm warn node_modules/typescript
+npm warn   dev typescript@"7.0.2" from the root project
+npm warn   2 more (eslint-config-next, ts-api-utils)
+npm warn
+npm warn Could not resolve dependency:
+npm warn peer typescript@">=4.8.4 <6.1.0" from @typescript-eslint/type-utils@8.64.0
+npm warn node_modules/eslint-config-next/node_modules/typescript-eslint/node_modules/@typescript-eslint/eslint-plugin/node_modules/@typescript-eslint/type-utils
+npm warn   @typescript-eslint/type-utils@"8.64.0" from @typescript-eslint/eslint-plugin@8.64.0
+npm warn   node_modules/eslint-config-next/node_modules/typescript-eslint/node_modules/@typescript-eslint/eslint-plugin
+npm warn
+npm warn Conflicting peer dependency: typescript@6.0.3
+npm warn node_modules/typescript
+npm warn   peer typescript@">=4.8.4 <6.1.0" from @typescript-eslint/type-utils@8.64.0
+npm warn   node_modules/eslint-config-next/node_modules/typescript-eslint/node_modules/@typescript-eslint/eslint-plugin/node_modules/@typescript-eslint/type-utils
+npm warn     @typescript-eslint/type-utils@"8.64.0" from @typescript-eslint/eslint-plugin@8.64.0
+npm warn     node_modules/eslint-config-next/node_modules/typescript-eslint/node_modules/@typescript-eslint/eslint-plugin
+npm warn ERESOLVE overriding peer dependency
+npm warn While resolving: @typescript-eslint/project-service@8.64.0
+npm warn Found: typescript@7.0.2
+npm warn node_modules/typescript
+npm warn   dev typescript@"7.0.2" from the root project
+npm warn   2 more (eslint-config-next, ts-api-utils)
+npm warn
+npm warn Could not resolve dependency:
+npm warn peer typescript@">=4.8.4 <6.1.0" from @typescript-eslint/project-service@8.64.0
+npm warn node_modules/eslint-config-next/node_modules/typescript-eslint/node_modules/@typescript-eslint/typescript-estree/node_modules/@typescript-eslint/project-service
+npm warn   @typescript-eslint/project-service@"8.64.0" from @typescript-eslint/typescript-estree@8.64.0
+npm warn   node_modules/eslint-config-next/node_modules/typescript-eslint/node_modules/@typescript-eslint/typescript-estree
+npm warn
+npm warn Conflicting peer dependency: typescript@6.0.3
+npm warn node_modules/typescript
+npm warn   peer typescript@">=4.8.4 <6.1.0" from @typescript-eslint/project-service@8.64.0
+npm warn   node_modules/eslint-config-next/node_modules/typescript-eslint/node_modules/@typescript-eslint/typescript-estree/node_modules/@typescript-eslint/project-service
+npm warn     @typescript-eslint/project-service@"8.64.0" from @typescript-eslint/typescript-estree@8.64.0
+npm warn     node_modules/eslint-config-next/node_modules/typescript-eslint/node_modules/@typescript-eslint/typescript-estree
+npm warn ERESOLVE overriding peer dependency
+npm warn While resolving: @typescript-eslint/tsconfig-utils@8.64.0
+npm warn Found: typescript@7.0.2
+npm warn node_modules/typescript
+npm warn   dev typescript@"7.0.2" from the root project
+npm warn   2 more (eslint-config-next, ts-api-utils)
+npm warn
+npm warn Could not resolve dependency:
+npm warn peer typescript@">=4.8.4 <6.1.0" from @typescript-eslint/tsconfig-utils@8.64.0
+npm warn node_modules/eslint-config-next/node_modules/typescript-eslint/node_modules/@typescript-eslint/typescript-estree/node_modules/@typescript-eslint/tsconfig-utils
+npm warn   @typescript-eslint/tsconfig-utils@"8.64.0" from @typescript-eslint/typescript-estree@8.64.0
+npm warn   node_modules/eslint-config-next/node_modules/typescript-eslint/node_modules/@typescript-eslint/typescript-estree
+npm warn   1 more (@typescript-eslint/project-service)
+npm warn
+npm warn Conflicting peer dependency: typescript@6.0.3
+npm warn node_modules/typescript
+npm warn   peer typescript@">=4.8.4 <6.1.0" from @typescript-eslint/tsconfig-utils@8.64.0
+npm warn   node_modules/eslint-config-next/node_modules/typescript-eslint/node_modules/@typescript-eslint/typescript-estree/node_modules/@typescript-eslint/tsconfig-utils
+npm warn     @typescript-eslint/tsconfig-utils@"8.64.0" from @typescript-eslint/typescript-estree@8.64.0
+npm warn     node_modules/eslint-config-next/node_modules/typescript-eslint/node_modules/@typescript-eslint/typescript-estree
+npm warn     1 more (@typescript-eslint/project-service)
+
+up to date, audited 413 packages in 3s
+
+141 packages are looking for funding
+  run `npm fund` for details
+
+11 vulnerabilities (5 moderate, 5 high, 1 critical)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+
+The "id" argument must be of type string. Received undefined
+Next.js build worker exited with code: 1 and signal: null
