@@ -20,6 +20,8 @@ import {
     Trash2,
     XCircle,
 } from 'lucide-react';
+import { TestSuiteView } from '@/components/test-suite/TestSuiteView';
+import type { TestCase as GeneratedTestCase, ExecutionRecord as TestCaseExecution, ActionStep } from '@/components/test-suite/types';
 
 type RepoDetailsProps = {
     repo: {
@@ -63,39 +65,6 @@ type RepositoryFileContent = {
     content?: string;
     skipped?: boolean;
     reason?: string;
-};
-
-type ActionStep = {
-    order: number;
-    action: string;
-    target?: string;
-    value?: string;
-    expected?: string;
-    description: string;
-};
-
-type GeneratedTestCase = {
-    id?: number;
-    title: string;
-    description: string;
-    type: string;
-    priority: string;
-    targetRoute: string;
-    targetFiles: string[];
-    expectedResult: string;
-    category?: string;
-    actionSteps?: ActionStep[];
-};
-
-type TestCaseExecution = {
-    testCaseId: number;
-    status: 'pending' | 'running' | 'passed' | 'failed';
-    sessionId?: string;
-    sessionUrl?: string;
-    logs?: string[];
-    error?: string;
-    durationMs?: number;
-    completedAt?: string;
 };
 
 const MAX_PREVIEW_LENGTH = 30000;
@@ -614,74 +583,15 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
         if (generatedTestCases.length === 0 || isRunningAll) return;
 
         setIsRunningAll(true);
-        const allIds = generatedTestCases.map((tc, idx) => tc.id ?? idx);
-        setRunningTestIds(new Set(allIds));
-
-        // Mark all as running
-        setExecutions((prev) => {
-            const next = { ...prev };
-            for (const id of allIds) {
-                next[id] = {
-                    testCaseId: id,
-                    status: 'running',
-                    logs: [`[${new Date().toLocaleTimeString()}] Batch execution initiated...`],
-                };
-            }
-            return next;
-        });
-
         try {
-            const response = await fetch('/api/browserbase/playwright-test', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    repositoryId: repo.databaseId || repo.id,
-                    runAll: true,
-                    appUrl: targetEnvUrl,
-                }),
-            });
-
-            const data = (await response.json().catch(() => null)) as {
-                success?: boolean;
-                executions?: {
-                    testCaseId: number;
-                    status: 'pending' | 'running' | 'passed' | 'failed';
-                    execution?: {
-                        status: 'pending' | 'running' | 'passed' | 'failed';
-                        sessionId?: string;
-                        sessionUrl?: string;
-                        logs?: string;
-                        error?: string;
-                        completedAt?: string;
-                    };
-                }[];
-            } | null;
-
-            if (response.ok && Array.isArray(data?.executions)) {
-                setExecutions((prev) => {
-                    const next = { ...prev };
-                    for (const report of data.executions || []) {
-                        const testId = report.testCaseId;
-                        next[testId] = {
-                            testCaseId: testId,
-                            status: report.status || report.execution?.status || 'passed',
-                            sessionId: report.execution?.sessionId,
-                            sessionUrl: report.execution?.sessionUrl,
-                            logs: typeof report.execution?.logs === 'string'
-                                ? report.execution.logs.split('\n')
-                                : ['Execution finished.'],
-                            error: report.execution?.error,
-                            completedAt: report.execution?.completedAt,
-                        };
-                    }
-                    return next;
-                });
+            for (let i = 0; i < generatedTestCases.length; i++) {
+                const testCase = generatedTestCases[i];
+                await handleRunSingleTest(testCase, i);
             }
         } catch (error) {
-            console.error('Failed to run all tests:', error);
+            console.error('Failed to run all tests sequentially:', error);
         } finally {
             setIsRunningAll(false);
-            setRunningTestIds(new Set());
         }
     };
 
@@ -983,6 +893,25 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
                 </div>
             </div>
 
+            {/* Repository Overview Card */}
+            <div className="rounded-2xl border border-slate-800/80 bg-slate-900/20 p-6 shadow-xl backdrop-blur-sm">
+                <h3 className="text-lg font-semibold text-slate-100">Repository overview</h3>
+                <p className="mt-2 text-sm text-slate-400">
+                    Your repository is connected and ready for inspection, branch-aware browsing, and repository-level test generation.
+                </p>
+
+                <div className="mt-5 grid gap-4 md:grid-cols-2">
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+                        <div className="text-xs uppercase tracking-wider text-slate-500">Visibility</div>
+                        <div className="mt-2 text-sm font-medium text-slate-100">{repo.private ? 'Private' : 'Public'}</div>
+                    </div>
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+                        <div className="text-xs uppercase tracking-wider text-slate-500">Language</div>
+                        <div className="mt-2 text-sm font-medium text-slate-100">{repo.language ?? 'Not available'}</div>
+                    </div>
+                </div>
+            </div>
+
             {/* AI Test Planning & Cloud Execution Section */}
             <div className="rounded-2xl border border-slate-800/80 bg-slate-900/20 p-6 shadow-xl backdrop-blur-sm lg:p-8">
                 <div className="flex flex-col gap-5 border-b border-slate-800/80 pb-6 md:flex-row md:items-center md:justify-between">
@@ -1006,26 +935,6 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
                             <Sparkles className="h-4 w-4" />
                             {isGeneratingTests ? 'Generating...' : 'Generate Test Cases'}
                         </button>
-                        {generatedTestCases.length > 0 && (
-                            <button
-                                type="button"
-                                onClick={() => void handleRunAllTests()}
-                                disabled={isRunningAll}
-                                className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-5 py-2.5 text-sm font-semibold text-emerald-300 shadow-lg transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                {isRunningAll ? (
-                                    <>
-                                        <RefreshCw className="h-4 w-4 animate-spin text-emerald-400" />
-                                        Running Suite...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Play className="h-4 w-4 fill-emerald-300" />
-                                        Run All Tests
-                                    </>
-                                )}
-                            </button>
-                        )}
                     </div>
                 </div>
 
@@ -1036,246 +945,23 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
                 ) : null}
 
                 {generatedTestCases.length > 0 ? (
-                    <div className="mt-6 grid gap-4">
-                        {generatedTestCases.map((testCase, index) => {
-                            const testId = testCase.id ?? index;
-                            const execution = executions[testId];
-                            const isThisRunning = runningTestIds.has(testId);
-                            const isLogsExpanded = expandedLogIds.has(testId);
-
-                            return (
-                                <article key={`${testCase.title}-${index}`} className="rounded-xl border border-slate-800 bg-slate-950/60 p-5 lg:p-6 transition hover:border-slate-700/80">
-                                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                                        <div>
-                                            <div className="text-xs uppercase tracking-[0.18em] text-slate-500">#{index + 1}</div>
-                                            <h4 className="mt-2 text-lg font-semibold text-slate-100">{testCase.title}</h4>
-                                        </div>
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            {/* Category Pill */}
-                                            {testCase.category ? (
-                                                <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wider text-emerald-300">
-                                                    {testCase.category}
-                                                </span>
-                                            ) : null}
-                                            <span className="rounded-full border border-slate-700 bg-slate-900 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wider text-slate-300">
-                                                {testCase.type}
-                                            </span>
-                                            <span className="rounded-full border border-slate-700 bg-slate-900 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wider text-slate-300">
-                                                {testCase.priority}
-                                            </span>
-
-                                            {/* Execution Live Status Pill */}
-                                            {execution?.status === 'passed' && (
-                                                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-emerald-400">
-                                                    <CheckCircle2 className="h-3.5 w-3.5" /> Passed
-                                                </span>
-                                            )}
-                                            {execution?.status === 'failed' && (
-                                                <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/40 bg-rose-500/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-rose-400">
-                                                    <XCircle className="h-3.5 w-3.5" /> Failed
-                                                </span>
-                                            )}
-                                            {isThisRunning && (
-                                                <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-amber-400">
-                                                    <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Running
-                                                </span>
-                                            )}
-                                            {!execution && !isThisRunning && (
-                                                <span className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
-                                                    Not Run
-                                                </span>
-                                            )}
-
-                                            {/* Run Test Button */}
-                                            <button
-                                                type="button"
-                                                onClick={() => void handleRunSingleTest(testCase, index)}
-                                                disabled={isThisRunning}
-                                                className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-300 shadow-sm transition hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50 ml-1"
-                                            >
-                                                {isThisRunning ? (
-                                                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                                                ) : (
-                                                    <Play className="h-3.5 w-3.5 fill-emerald-300" />
-                                                )}
-                                                Run Test
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <p className="mt-3 text-sm text-slate-300">{testCase.description}</p>
-
-                                    <dl className="mt-4 grid gap-3 text-sm md:grid-cols-2">
-                                        <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-3">
-                                            <dt className="text-xs uppercase tracking-wider text-slate-500">Target route</dt>
-                                            <dd className="mt-2 break-all text-slate-100 font-mono text-xs">{testCase.targetRoute}</dd>
-                                        </div>
-                                        <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-3">
-                                            <dt className="text-xs uppercase tracking-wider text-slate-500">Target files</dt>
-                                            <dd className="mt-2 break-all text-slate-100 font-mono text-xs">
-                                                {testCase.targetFiles.length > 0 ? testCase.targetFiles.join(', ') : 'N/A'}
-                                            </dd>
-                                        </div>
-                                    </dl>
-
-                                    <div className="mt-4 rounded-lg border border-slate-800 bg-slate-900/60 p-3">
-                                        <div className="text-xs uppercase tracking-wider text-slate-500">Expected result</div>
-                                        <p className="mt-2 text-sm text-slate-200">{testCase.expectedResult}</p>
-                                    </div>
-
-                                    {/* Action Steps */}
-                                    {testCase.actionSteps && testCase.actionSteps.length > 0 ? (
-                                        <div className="mt-4 rounded-lg border border-slate-800 bg-slate-900/40 p-3">
-                                            <div className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
-                                                Playwright Execution Steps ({testCase.actionSteps.length})
-                                            </div>
-                                            <ol className="mt-3 space-y-2 text-xs">
-                                                {testCase.actionSteps.map((step, stepIndex) => (
-                                                    <li
-                                                        key={`tc-${index}-step-${stepIndex}-${step.order ?? stepIndex + 1}`}
-                                                        className="flex items-start gap-2.5 rounded border border-slate-800/80 bg-slate-950/70 p-2 text-slate-300"
-                                                    >
-                                                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-emerald-500/10 font-mono text-[10px] font-bold text-emerald-400">
-                                                            {step.order ?? stepIndex + 1}
-                                                        </span>
-                                                        <div className="min-w-0 flex-1">
-                                                            <div className="flex flex-wrap items-center gap-1.5">
-                                                                <span className="font-mono font-semibold uppercase text-emerald-300">
-                                                                    {step.action}
-                                                                </span>
-                                                                {step.target ? (
-                                                                    <code className="rounded bg-slate-900 px-1 py-0.5 text-slate-300">
-                                                                        {step.target}
-                                                                    </code>
-                                                                ) : null}
-                                                                {step.value ? (
-                                                                    <span className="text-slate-400">
-                                                                        =&gt; <code className="text-slate-200">{step.value}</code>
-                                                                    </span>
-                                                                ) : null}
-                                                                {step.expected ? (
-                                                                    <span className="text-slate-400">
-                                                                        (expect: <code className="text-emerald-400">{step.expected}</code>)
-                                                                    </span>
-                                                                ) : null}
-                                                            </div>
-                                                            <p className="mt-1 text-slate-400">{step.description}</p>
-                                                        </div>
-                                                    </li>
-                                                ))}
-                                            </ol>
-                                        </div>
-                                    ) : null}
-
-                                    {/* Execution Details & Terminal Logs Drawer */}
-                                    {execution ? (
-                                        <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/80 overflow-hidden">
-                                            <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/80 px-4 py-3 border-b border-slate-800 text-xs">
-                                                <div className="flex items-center gap-2">
-                                                    <Terminal className="h-4 w-4 text-emerald-400" />
-                                                    <span className="font-semibold text-slate-200">Execution Output</span>
-                                                    {execution.durationMs ? (
-                                                        <span className="text-slate-500 font-mono">({execution.durationMs}ms)</span>
-                                                    ) : null}
-                                                </div>
-
-                                                <div className="flex items-center gap-2">
-                                                    {execution.sessionUrl ? (
-                                                        <a
-                                                            href={execution.sessionUrl}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="inline-flex items-center gap-1.5 rounded bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
-                                                        >
-                                                            <ExternalLink className="h-3.5 w-3.5" />
-                                                            Watch Cloud Replay
-                                                        </a>
-                                                    ) : null}
-
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => toggleLogs(testId)}
-                                                        className="inline-flex items-center gap-1 rounded bg-slate-800 px-2.5 py-1 text-slate-300 transition hover:bg-slate-700"
-                                                    >
-                                                        {isLogsExpanded ? (
-                                                            <>
-                                                                <ChevronUp className="h-3.5 w-3.5" />
-                                                                Hide Logs
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <ChevronDown className="h-3.5 w-3.5" />
-                                                                View Logs ({execution.logs?.length || 0})
-                                                            </>
-                                                        )}
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            {execution.error && (
-                                                <div className="bg-rose-950/30 border-b border-rose-900/40 p-3 px-4 text-xs text-rose-300 flex items-start gap-2">
-                                                    <AlertCircle className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
-                                                    <div>
-                                                        <span className="font-semibold">Execution Failure: </span>
-                                                        {execution.error}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {isLogsExpanded && (
-                                                <div className="bg-black/90 p-4 font-mono text-[11px] leading-relaxed text-slate-300 max-h-64 overflow-y-auto repo-inspection-scrollbar">
-                                                    {execution.logs && execution.logs.length > 0 ? (
-                                                        execution.logs.map((logLine, lineIdx) => (
-                                                            <div
-                                                                key={lineIdx}
-                                                                className={
-                                                                    logLine.includes('❌') || logLine.includes('failed')
-                                                                        ? 'text-rose-400'
-                                                                        : logLine.includes('✅') || logLine.includes('passed') || logLine.includes('✨')
-                                                                        ? 'text-emerald-400'
-                                                                        : logLine.includes('▶️') || logLine.includes('Navigating')
-                                                                        ? 'text-cyan-300'
-                                                                        : 'text-slate-300'
-                                                                }
-                                                            >
-                                                                {logLine}
-                                                            </div>
-                                                        ))
-                                                    ) : (
-                                                        <div className="text-slate-600">No console logs available.</div>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                    ) : null}
-                                </article>
-                            );
-                        })}
+                    <div className="mt-6">
+                        <TestSuiteView
+                            tests={generatedTestCases}
+                            executions={executions}
+                            runningTestIds={runningTestIds}
+                            isRunningAll={isRunningAll}
+                            isGeneratingTests={isGeneratingTests}
+                            onRunSingleTest={handleRunSingleTest}
+                            onRunAllTests={handleRunAllTests}
+                            onRegenerateTests={handleGenerateTests}
+                        />
                     </div>
                 ) : (
-                    <div className="mt-4 rounded-lg border border-dashed border-slate-700 bg-slate-950/40 p-4 text-sm text-slate-400">
-                        No generated test cases yet. Select a branch and generate repository-level tests.
+                    <div className="mt-6 rounded-xl border border-dashed border-slate-800 bg-slate-950/40 p-8 text-center text-sm text-slate-400">
+                        No generated test cases yet. Select a branch and click &quot;Generate Test Cases&quot; to synthesize AST-grounded tests.
                     </div>
                 )}
-            </div>
-
-            {/* Repository Overview Card */}
-            <div className="rounded-2xl border border-slate-800/80 bg-slate-900/20 p-6 shadow-xl backdrop-blur-sm">
-                <h3 className="text-lg font-semibold text-slate-100">Repository overview</h3>
-                <p className="mt-2 text-sm text-slate-400">
-                    Your repository is connected and ready for inspection, branch-aware browsing, and repository-level test generation.
-                </p>
-
-                <div className="mt-5 grid gap-4 md:grid-cols-2">
-                    <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
-                        <div className="text-xs uppercase tracking-wider text-slate-500">Visibility</div>
-                        <div className="mt-2 text-sm font-medium text-slate-100">{repo.private ? 'Private' : 'Public'}</div>
-                    </div>
-                    <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
-                        <div className="text-xs uppercase tracking-wider text-slate-500">Language</div>
-                        <div className="mt-2 text-sm font-medium text-slate-100">{repo.language ?? 'Not available'}</div>
-                    </div>
-                </div>
             </div>
         </section>
     );
