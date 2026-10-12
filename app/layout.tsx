@@ -4,8 +4,8 @@ import type { Metadata } from "next";
 import Provider from './provider';
 
 export const metadata: Metadata = {
-  title: "Next.js Premium Startup Boilerplate",
-  description: "Created using the ultimate interactive Next.js stack generator CLI.",
+  title: "TestPilot — AI-Assisted Automated QA Platform",
+  description: "Deterministic code analysis meets cloud browser automation.",
 };
 
 export default function RootLayout({
@@ -15,8 +15,8 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider>
-      <html lang="en">
-        <body style={{ margin: 0, padding: 0 }}>
+      <html lang="en" className="dark">
+        <body className="bg-slate-950 text-slate-100 min-h-screen antialiased" style={{ margin: 0, padding: 0 }}>
           <Provider>
             {children}
           </Provider>

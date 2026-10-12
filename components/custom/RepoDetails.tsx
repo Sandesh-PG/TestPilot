@@ -366,14 +366,14 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
                             Connected
                         </div>
                         <div>
-                            <h2 className="text-3xl font-semibold tracking-tight text-zinc-50">{repo.name}</h2>
-                            <p className="mt-2 text-sm text-zinc-400">{repo.full_name}</p>
+                            <h2 className="text-3xl font-semibold tracking-tight text-slate-50">{repo.name}</h2>
+                            <p className="mt-2 text-sm text-slate-400">{repo.full_name}</p>
                         </div>
                         <a
                             href={repo.html_url}
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex items-center gap-2 text-sm font-medium text-zinc-200 transition-colors hover:text-white"
+                            className="inline-flex items-center gap-2 text-sm font-medium text-slate-200 transition-colors hover:text-white"
                         >
                             <ExternalLink className="h-4 w-4" />
                             Open repository
@@ -385,7 +385,7 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
                             type="button"
                             disabled
                             title="Synchronization is not available in the current project API"
-                            className="inline-flex cursor-not-allowed items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/70 px-4 py-2 text-sm font-medium text-zinc-500"
+                            className="inline-flex cursor-not-allowed items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-2 text-sm font-medium text-slate-500"
                         >
                             <RefreshCw className="h-4 w-4" />
                             Sync unavailable
@@ -393,7 +393,7 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
                         <button
                             type="button"
                             onClick={onDisconnect}
-                            className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/70 px-4 py-2 text-sm font-medium text-zinc-200 transition-colors hover:border-zinc-600 hover:bg-zinc-800"
+                            className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-slate-600 hover:bg-slate-800"
                         >
                             <Trash2 className="h-4 w-4" />
                             Disconnect
@@ -402,52 +402,52 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
                 </div>
 
                 <div className="mt-8 grid gap-4 sm:grid-cols-3">
-                    <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-5">
-                        <div className="flex items-center gap-2 text-zinc-400">
+                    <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-5">
+                        <div className="flex items-center gap-2 text-slate-400">
                             <GitBranch className="h-4 w-4" />
                             <span className="text-xs uppercase tracking-wider">Default branch</span>
                         </div>
-                        <p className="mt-3 text-base font-medium text-zinc-200">{repo.default_branch}</p>
+                        <p className="mt-3 text-base font-medium text-slate-200">{repo.default_branch}</p>
                     </div>
-                    <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-5">
-                        <div className="flex items-center gap-2 text-zinc-400">
+                    <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-5">
+                        <div className="flex items-center gap-2 text-slate-400">
                             <Clock3 className="h-4 w-4" />
                             <span className="text-xs uppercase tracking-wider">Updated</span>
                         </div>
-                        <p className="mt-3 text-base font-medium text-zinc-200">{new Date(repo.updated_at).toLocaleString()}</p>
+                        <p className="mt-3 text-base font-medium text-slate-200">{new Date(repo.updated_at).toLocaleString()}</p>
                     </div>
-                    <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-5">
-                        <div className="flex items-center gap-2 text-zinc-400">
+                    <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-5">
+                        <div className="flex items-center gap-2 text-slate-400">
                             <CheckCircle2 className="h-4 w-4" />
                             <span className="text-xs uppercase tracking-wider">Scanned tests</span>
                         </div>
-                        <p className="mt-3 text-base font-medium text-zinc-200">{testCount > 0 ? String(testCount) : 'Not scanned yet'}</p>
+                        <p className="mt-3 text-base font-medium text-slate-200">{testCount > 0 ? String(testCount) : 'Not scanned yet'}</p>
                     </div>
                 </div>
             </div>
 
-            <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/20 p-6 shadow-xl backdrop-blur-sm lg:p-8">
-                <div className="flex flex-col gap-5 border-b border-zinc-800/80 pb-6 md:flex-row md:items-start md:justify-between">
+            <div className="rounded-2xl border border-slate-800/80 bg-slate-900/20 p-6 shadow-xl backdrop-blur-sm lg:p-8">
+                <div className="flex flex-col gap-5 border-b border-slate-800/80 pb-6 md:flex-row md:items-start md:justify-between">
                     <div>
                         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-400/80">
                             <FileCode2 className="h-4 w-4" />
                             Repository explorer
                         </div>
-                        <h3 className="mt-3 text-2xl font-semibold tracking-tight text-zinc-100">Branch and repository inspection</h3>
-                        <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
+                        <h3 className="mt-3 text-2xl font-semibold tracking-tight text-slate-100">Branch and repository inspection</h3>
+                        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
                             Select a branch, browse repository files, preview content, and generate repository-level tests.
                         </p>
                     </div>
-                    <div className="flex shrink-0 items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-950/70 px-4 py-3 text-sm text-zinc-200 shadow-inner shadow-black/20">
-                        <GitBranch className="h-4 w-4 text-zinc-400" />
+                    <div className="flex shrink-0 items-center gap-2 rounded-lg border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-200 shadow-inner shadow-black/20">
+                        <GitBranch className="h-4 w-4 text-slate-400" />
                         {selectedBranch || 'No branch selected'}
                     </div>
                 </div>
 
                 <div className="mt-6 max-w-xl">
-                    <label htmlFor="repository-branch" className="block text-xs font-medium uppercase tracking-[0.2em] text-zinc-500">Active branch</label>
+                    <label htmlFor="repository-branch" className="block text-xs font-medium uppercase tracking-[0.2em] text-slate-500">Active branch</label>
                     {isLoadingBranches ? (
-                        <div className="mt-3 h-12 animate-pulse rounded-lg border border-zinc-800 bg-zinc-950/60" />
+                        <div className="mt-3 h-12 animate-pulse rounded-lg border border-slate-800 bg-slate-950/60" />
                     ) : branchError ? (
                         <div className="mt-3 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
                             {branchError}
@@ -457,7 +457,7 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
                             id="repository-branch"
                             value={selectedBranch}
                             onChange={(event) => setSelectedBranch(event.target.value)}
-                            className="mt-3 h-12 w-full rounded-lg border border-zinc-700 bg-zinc-950/70 px-4 text-sm text-zinc-100 outline-none transition focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/10"
+                            className="mt-3 h-12 w-full rounded-lg border border-slate-700 bg-slate-950/70 px-4 text-sm text-slate-100 outline-none transition focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/10"
                         >
                             {branches.length === 0 ? (
                                 <option value={repo.default_branch}>{repo.default_branch}</option>
@@ -473,16 +473,16 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
                 </div>
 
                 <div className="mt-8 grid min-w-0 gap-6 lg:grid-cols-[minmax(280px,32%)_minmax(0,1fr)]">
-                    <div className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 lg:p-5">
-                        <div className="mb-4 flex items-center justify-between text-sm text-zinc-200">
+                    <div className="min-w-0 rounded-xl border border-slate-800 bg-slate-950/60 p-4 lg:p-5">
+                        <div className="mb-4 flex items-center justify-between text-sm text-slate-200">
                             <span className="font-medium">File browser</span>
-                            <span className="rounded-full bg-zinc-800/80 px-2.5 py-1 text-xs text-zinc-400">{fileTree.length} files</span>
+                            <span className="rounded-full bg-slate-800/80 px-2.5 py-1 text-xs text-slate-400">{fileTree.length} files</span>
                         </div>
 
                         {isLoadingFiles ? (
                             <div className="space-y-2">
                                 {Array.from({ length: 8 }).map((_, index) => (
-                                    <div key={index} className="h-9 animate-pulse rounded-md bg-zinc-800/70" />
+                                    <div key={index} className="h-9 animate-pulse rounded-md bg-slate-800/70" />
                                 ))}
                             </div>
                         ) : treeError ? (
@@ -490,7 +490,7 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
                                 {treeError}
                             </div>
                         ) : fileTree.length === 0 ? (
-                            <div className="rounded-lg border border-dashed border-zinc-700 bg-zinc-900/40 p-4 text-sm text-zinc-400">
+                            <div className="rounded-lg border border-dashed border-slate-700 bg-slate-900/40 p-4 text-sm text-slate-400">
                                 No supported files were found for this branch.
                             </div>
                         ) : (
@@ -506,10 +506,10 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
                                             onClick={() => void handleFileSelection(file.path)}
                                             className={`flex min-w-0 w-full items-center gap-2 rounded-md border px-3 py-2.5 text-left text-sm transition ${isSelected
                                                 ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-100'
-                                                : 'border-transparent bg-transparent text-zinc-300 hover:border-zinc-700 hover:bg-zinc-900/60'} `}
+                                                : 'border-transparent bg-transparent text-slate-300 hover:border-slate-700 hover:bg-slate-900/60'} `}
                                             style={{ paddingLeft: `${12 + depth * 14}px` }}
                                         >
-                                            <FileCode2 className="h-4 w-4 shrink-0 text-zinc-400" />
+                                            <FileCode2 className="h-4 w-4 shrink-0 text-slate-400" />
                                             <span className="truncate">{file.path.split('/').pop()}</span>
                                         </button>
                                     );
@@ -518,21 +518,21 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
                         )}
                     </div>
 
-                    <div className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 lg:p-5">
-                        <div className="mb-4 flex min-w-0 items-center justify-between gap-4 text-sm text-zinc-200">
+                    <div className="min-w-0 rounded-xl border border-slate-800 bg-slate-950/60 p-4 lg:p-5">
+                        <div className="mb-4 flex min-w-0 items-center justify-between gap-4 text-sm text-slate-200">
                             <span className="font-medium">File preview</span>
                             {selectedFile ? (
-                                <span className="min-w-0 truncate rounded-md bg-zinc-900 px-2.5 py-1 text-xs text-zinc-400">{selectedFile}</span>
+                                <span className="min-w-0 truncate rounded-md bg-slate-900 px-2.5 py-1 text-xs text-slate-400">{selectedFile}</span>
                             ) : null}
                         </div>
 
                         {!selectedFile ? (
-                            <div className="flex min-h-[600px] items-center justify-center rounded-lg border border-dashed border-zinc-700 bg-zinc-900/40 p-6 text-center text-sm leading-6 text-zinc-400">
+                            <div className="flex min-h-[600px] items-center justify-center rounded-lg border border-dashed border-slate-700 bg-slate-900/40 p-6 text-center text-sm leading-6 text-slate-400">
                                 Select a file from the browser to preview its content.
                             </div>
                         ) : isLoadingFile ? (
                             <div className="flex min-h-[600px] items-center justify-center">
-                                <div className="flex items-center gap-2 text-sm text-zinc-300">
+                                <div className="flex items-center gap-2 text-sm text-slate-300">
                                     <RefreshCw className="h-4 w-4 animate-spin" />
                                     Loading file content...
                                 </div>
@@ -542,12 +542,12 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
                                 {filePreviewError}
                             </div>
                         ) : (
-                            <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950/80">
-                                <div className="flex items-center justify-between gap-4 border-b border-zinc-800 bg-zinc-900/90 px-4 py-3 text-xs text-zinc-400">
+                            <div className="overflow-hidden rounded-lg border border-slate-800 bg-slate-950/80">
+                                <div className="flex items-center justify-between gap-4 border-b border-slate-800 bg-slate-900/90 px-4 py-3 text-xs text-slate-400">
                                     <span className="truncate">{selectedFile}</span>
                                     <span>{previewContent.length} chars</span>
                                 </div>
-                                <pre className="repo-inspection-scrollbar max-h-[600px] overflow-auto whitespace-pre p-5 font-mono text-[13px] leading-7 text-zinc-200">
+                                <pre className="repo-inspection-scrollbar max-h-[600px] overflow-auto whitespace-pre p-5 font-mono text-[13px] leading-7 text-slate-200">
                                     <code>{previewContent}</code>
                                 </pre>
                             </div>
@@ -556,15 +556,15 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
                 </div>
             </div>
 
-            <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/20 p-6 shadow-xl backdrop-blur-sm lg:p-8">
-                <div className="flex flex-col gap-5 border-b border-zinc-800/80 pb-6 md:flex-row md:items-center md:justify-between">
+            <div className="rounded-2xl border border-slate-800/80 bg-slate-900/20 p-6 shadow-xl backdrop-blur-sm lg:p-8">
+                <div className="flex flex-col gap-5 border-b border-slate-800/80 pb-6 md:flex-row md:items-center md:justify-between">
                     <div>
                         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-400/80">
                             <Sparkles className="h-4 w-4" />
                             AI test planning
                         </div>
-                        <h3 className="mt-3 text-2xl font-semibold tracking-tight text-zinc-100">Test generation</h3>
-                        <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
+                        <h3 className="mt-3 text-2xl font-semibold tracking-tight text-slate-100">Test generation</h3>
+                        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
                             Repository-level generation from the currently selected branch and repository context.
                         </p>
                     </div>
@@ -572,7 +572,7 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
                         type="button"
                         onClick={() => void handleGenerateTests()}
                         disabled={!selectedBranch || isGeneratingTests}
-                        className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-emerald-400 px-5 py-2.5 text-sm font-semibold text-emerald-950 shadow-lg shadow-emerald-950/30 transition-colors hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500 disabled:shadow-none"
+                        className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-emerald-400 px-5 py-2.5 text-sm font-semibold text-emerald-950 shadow-lg shadow-emerald-950/30 transition-colors hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500 disabled:shadow-none"
                     >
                         <Sparkles className="h-4 w-4" />
                         {isGeneratingTests ? 'Generating...' : 'Generate Test Cases'}
@@ -588,77 +588,77 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
                 {generatedTestCases.length > 0 ? (
                     <div className="mt-6 grid gap-4">
                         {generatedTestCases.map((testCase, index) => (
-                            <article key={`${testCase.title}-${index}`} className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-5 lg:p-6">
+                            <article key={`${testCase.title}-${index}`} className="rounded-xl border border-slate-800 bg-slate-950/60 p-5 lg:p-6">
                                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                                     <div>
-                                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">#{index + 1}</div>
-                                        <h4 className="mt-2 text-lg font-semibold text-zinc-100">{testCase.title}</h4>
+                                        <div className="text-xs uppercase tracking-[0.18em] text-slate-500">#{index + 1}</div>
+                                        <h4 className="mt-2 text-lg font-semibold text-slate-100">{testCase.title}</h4>
                                     </div>
                                     <div className="flex flex-wrap gap-2 text-[11px] font-medium uppercase tracking-wider">
-                                        <span className="rounded-full border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-300">
+                                        <span className="rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-slate-300">
                                             {testCase.type}
                                         </span>
-                                        <span className="rounded-full border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-300">
+                                        <span className="rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-slate-300">
                                             {testCase.priority}
                                         </span>
                                     </div>
                                 </div>
 
-                                <p className="mt-3 text-sm text-zinc-300">{testCase.description}</p>
+                                <p className="mt-3 text-sm text-slate-300">{testCase.description}</p>
 
                                 <dl className="mt-4 grid gap-3 text-sm md:grid-cols-2">
-                                    <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3">
-                                        <dt className="text-xs uppercase tracking-wider text-zinc-500">Target route</dt>
-                                        <dd className="mt-2 break-all text-zinc-100">{testCase.targetRoute}</dd>
+                                    <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-3">
+                                        <dt className="text-xs uppercase tracking-wider text-slate-500">Target route</dt>
+                                        <dd className="mt-2 break-all text-slate-100">{testCase.targetRoute}</dd>
                                     </div>
-                                    <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3">
-                                        <dt className="text-xs uppercase tracking-wider text-zinc-500">Target files</dt>
-                                        <dd className="mt-2 break-all text-zinc-100">
+                                    <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-3">
+                                        <dt className="text-xs uppercase tracking-wider text-slate-500">Target files</dt>
+                                        <dd className="mt-2 break-all text-slate-100">
                                             {testCase.targetFiles.length > 0 ? testCase.targetFiles.join(', ') : 'N/A'}
                                         </dd>
                                     </div>
                                 </dl>
 
-                                <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-900/60 p-3">
-                                    <div className="text-xs uppercase tracking-wider text-zinc-500">Expected result</div>
-                                    <p className="mt-2 text-sm text-zinc-200">{testCase.expectedResult}</p>
+                                <div className="mt-4 rounded-lg border border-slate-800 bg-slate-900/60 p-3">
+                                    <div className="text-xs uppercase tracking-wider text-slate-500">Expected result</div>
+                                    <p className="mt-2 text-sm text-slate-200">{testCase.expectedResult}</p>
                                 </div>
                             </article>
                         ))}
                     </div>
                 ) : (
-                    <div className="mt-4 rounded-lg border border-dashed border-zinc-700 bg-zinc-950/40 p-4 text-sm text-zinc-400">
+                    <div className="mt-4 rounded-lg border border-dashed border-slate-700 bg-slate-950/40 p-4 text-sm text-slate-400">
                         No generated test cases yet. Select a branch and generate repository-level tests.
                     </div>
                 )}
             </div>
 
-            <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/20 p-6 shadow-xl backdrop-blur-sm">
-                <h3 className="text-lg font-semibold text-zinc-100">Repository overview</h3>
-                <p className="mt-2 text-sm text-zinc-400">
+            <div className="rounded-2xl border border-slate-800/80 bg-slate-900/20 p-6 shadow-xl backdrop-blur-sm">
+                <h3 className="text-lg font-semibold text-slate-100">Repository overview</h3>
+                <p className="mt-2 text-sm text-slate-400">
                     Your repository is connected and ready for inspection, branch-aware browsing, and repository-level test generation.
                 </p>
 
                 <div className="mt-5 grid gap-4 md:grid-cols-2">
-                    <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
-                        <div className="text-xs uppercase tracking-wider text-zinc-500">Visibility</div>
-                        <div className="mt-2 text-sm font-medium text-zinc-100">{repo.private ? 'Private' : 'Public'}</div>
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+                        <div className="text-xs uppercase tracking-wider text-slate-500">Visibility</div>
+                        <div className="mt-2 text-sm font-medium text-slate-100">{repo.private ? 'Private' : 'Public'}</div>
                     </div>
-                    <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
-                        <div className="text-xs uppercase tracking-wider text-zinc-500">Language</div>
-                        <div className="mt-2 text-sm font-medium text-zinc-100">{repo.language ?? 'Not available'}</div>
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+                        <div className="text-xs uppercase tracking-wider text-slate-500">Language</div>
+                        <div className="mt-2 text-sm font-medium text-slate-100">{repo.language ?? 'Not available'}</div>
                     </div>
-                    <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4 md:col-span-2">
-                        <div className="text-xs uppercase tracking-wider text-zinc-500">Description</div>
-                        <div className="mt-2 text-sm font-medium text-zinc-100">{repo.description ?? 'No description available'}</div>
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4 md:col-span-2">
+                        <div className="text-xs uppercase tracking-wider text-slate-500">Description</div>
+                        <div className="mt-2 text-sm font-medium text-slate-100">{repo.description ?? 'No description available'}</div>
                     </div>
-                    <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
-                        <div className="text-xs uppercase tracking-wider text-zinc-500">Branches</div>
-                        <div className="mt-2 text-sm font-medium text-zinc-100">{branchCount || branches.length || 1}</div>
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+                        <div className="text-xs uppercase tracking-wider text-slate-500">Branches</div>
+                        <div className="mt-2 text-sm font-medium text-slate-100">{branchCount || branches.length || 1}</div>
                     </div>
-                    <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
-                        <div className="text-xs uppercase tracking-wider text-zinc-500">Tests</div>
-                        <div className="mt-2 text-sm font-medium text-zinc-100">{testCount > 0 ? String(testCount) : 'Not scanned yet'}</div>
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+                        <div className="text-xs uppercase tracking-wider text-slate-500">Tests</div>
+                        <div className="mt-2 text-sm font-medium text-slate-100">{testCount > 0 ? String(testCount) : 'Not scanned yet'}</div>
                     </div>
                 </div>
             </div>

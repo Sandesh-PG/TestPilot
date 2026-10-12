@@ -601,12 +601,12 @@ export function analyzeRepositoryContext(context: RepositoryContext): Repository
     const packageJson = context.files.find((file) => lowerPath(file.path) === 'package.json');
     const packageManager = packageJson
         ? (() => {
-              const pkgName = packageJson.content.toLowerCase();
-              if (pkgName.includes('"pnpm"') || pkgName.includes('pnpm')) return 'pnpm';
-              if (pkgName.includes('"yarn"') || pkgName.includes('yarn')) return 'yarn';
-              if (pkgName.includes('"bun"') || pkgName.includes('bun')) return 'bun';
-              return 'npm';
-          })()
+            const pkgName = packageJson.content.toLowerCase();
+            if (pkgName.includes('"pnpm"') || pkgName.includes('pnpm')) return 'pnpm';
+            if (pkgName.includes('"yarn"') || pkgName.includes('yarn')) return 'yarn';
+            if (pkgName.includes('"bun"') || pkgName.includes('bun')) return 'bun';
+            return 'npm';
+        })()
         : context.project.packageManager;
 
     const routes: RouteSurface[] = [];

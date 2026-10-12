@@ -15,16 +15,16 @@ export default function EmptyWorkSpace() {
     };
 
     return (
-        <div className="border border-zinc-800/80 bg-zinc-900/20 rounded-2xl flex flex-col items-center justify-center py-16 px-6 text-center backdrop-blur-sm shadow-xl">
+        <div className="border border-slate-800/80 bg-slate-900/30 rounded-2xl flex flex-col items-center justify-center py-16 px-6 text-center backdrop-blur-sm shadow-xl">
                 <div className="relative mb-6 flex items-center justify-center">
                     <svg width="160" height="120" viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <circle cx="80" cy="60" r="45" fill="url(#glow-grad)" opacity="0.12" />
-                        <path d="M20 35C20 31.6863 22.6863 29 26 29H54.5858C56.177 29 57.703 29.6321 58.8284 30.7574L68.1716 40.1005C69.297 41.2259 70.823 41.858 72.4142 41.858H114C117.314 41.858 120 44.5437 120 47.858V89C120 92.3137 117.314 95 114 95H26C22.6863 95 20 92.3137 20 89V35Z" fill="#18181b" stroke="#3f3f46" strokeWidth="2" />
-                        <path d="M20 47.858C20 44.5437 22.6863 41.858 26 41.858H114C117.314 41.858 120 44.5437 120 47.858V89C120 92.3137 117.314 95 114 95H26C22.6863 95 20 92.3137 20 89V47.858Z" fill="#27272a" stroke="#52525b" strokeWidth="2" />
+                        <path d="M20 35C20 31.6863 22.6863 29 26 29H54.5858C56.177 29 57.703 29.6321 58.8284 30.7574L68.1716 40.1005C69.297 41.2259 70.823 41.858 72.4142 41.858H114C117.314 41.858 120 44.5437 120 47.858V89C120 92.3137 117.314 95 114 95H26C22.6863 95 20 92.3137 20 89V35Z" fill="#0f172a" stroke="#334155" strokeWidth="2" />
+                        <path d="M20 47.858C20 44.5437 22.6863 41.858 26 41.858H114C117.314 41.858 120 44.5437 120 47.858V89C120 92.3137 117.314 95 114 95H26C22.6863 95 20 92.3137 20 89V47.858Z" fill="#1e293b" stroke="#475569" strokeWidth="2" />
                         <path d="M50 63L45 68L50 73" stroke="#a855f7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.8" />
                         <path d="M70 63L75 68L70 73" stroke="#a855f7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.8" />
                         <path d="M62 61L58 75" stroke="#a855f7" strokeWidth="2" strokeLinecap="round" opacity="0.8" />
-                        <circle cx="106" cy="80" r="20" fill="#09090b" stroke="#10b981" strokeWidth="2" strokeDasharray="4 4" />
+                        <circle cx="106" cy="80" r="20" fill="#020617" stroke="#10b981" strokeWidth="2" strokeDasharray="4 4" />
                         <g transform="translate(98, 72) scale(0.65)">
                             <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                             <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -41,10 +41,10 @@ export default function EmptyWorkSpace() {
                     </svg>
                 </div>
 
-                <h2 className="text-xl font-semibold text-zinc-100 mb-2">
+                <h2 className="text-xl font-semibold text-slate-100 mb-2">
                     No repository connected
                 </h2>
-                <p className="text-sm text-zinc-400 max-w-sm mb-8 leading-relaxed">
+                <p className="text-sm text-slate-400 max-w-sm mb-8 leading-relaxed">
                     Connect your GitHub account and add a repository to generate and run test cases.
                 </p>
 
@@ -58,7 +58,7 @@ export default function EmptyWorkSpace() {
 
                 <a
                     href="#learn"
-                    className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-300 text-xs font-semibold mt-6 transition-colors group"
+                    className="flex items-center gap-1.5 text-slate-500 hover:text-slate-300 text-xs font-semibold mt-6 transition-colors group"
                 >
                     <BookOpen className="w-3.5 h-3.5" />
                     <span>Learn how it works</span>

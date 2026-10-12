@@ -1,9 +1,21 @@
 'use client';
 
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect, useState, useMemo } from 'react';
 import { UserDetailContext } from '@/context/userDetail';
 import EmptyWorkSpace from './EmptyWorkSpace';
 import RepoDetails from './RepoDetails';
+import DisconnectGitHubButton from './DisconnectGitHubButton';
+import {
+    Search,
+    GitBranch,
+    Lock,
+    Globe,
+    Clock,
+    CheckCircle2,
+    ArrowRight,
+    X,
+    FolderGit2,
+} from 'lucide-react';
 
 type GitHubRepository = {
     id: number;
@@ -38,6 +50,44 @@ type PersistedRepository = {
 };
 
 type WorkspaceRepositoryState = 'loading' | 'connected' | 'not-connected' | 'error';
+
+const LANGUAGE_COLORS: Record<string, string> = {
+    JavaScript: '#f1e05a',
+    TypeScript: '#3178c6',
+    Python: '#3572A5',
+    Java: '#b07219',
+    Go: '#00ADD8',
+    Rust: '#dea584',
+    Ruby: '#701516',
+    PHP: '#4F5D95',
+    'C++': '#f34b7d',
+    C: '#555555',
+    'C#': '#178600',
+    Swift: '#F05138',
+    Kotlin: '#A97BFF',
+    HTML: '#e34c26',
+    CSS: '#563d7c',
+    Vue: '#41b883',
+    Shell: '#89e051',
+    Dart: '#00B4AB',
+};
+
+function formatRelativeDate(dateString: string): string {
+    try {
+        const date = new Date(dateString);
+        const now = new Date();
+        const diffMs = now.getTime() - date.getTime();
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+        if (diffDays <= 0) return 'Updated today';
+        if (diffDays === 1) return 'Updated yesterday';
+        if (diffDays < 30) return `${diffDays}d ago`;
+        if (diffDays < 365) return `${Math.floor(diffDays / 30)}mo ago`;
+        return `${Math.floor(diffDays / 365)}y ago`;
+    } catch {
+        return dateString;
+    }
+}
 
 const mapPersistedRepository = (repository: Partial<PersistedRepository> | Record<string, unknown> | null): GitHubRepository | null => {
     if (!repository || typeof repository !== 'object') {
@@ -129,6 +179,10 @@ export default function WorkSpaceBody() {
     const [isLoadingRepositories, setIsLoadingRepositories] = useState(true);
     const [hasGitHubConnection, setHasGitHubConnection] = useState<boolean | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+    // Search and Language Filtering State
+    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedLanguage, setSelectedLanguage] = useState<string>('All');
 
     useEffect(() => {
         let isMounted = true;
@@ -229,9 +283,14 @@ export default function WorkSpaceBody() {
 
                     return loadedRepositories[0]?.id ?? null;
                 });
-            } catch {
-                if (!controller.signal.aborted) {
-                    setHasGitHubConnection(true);
+            } catch (error) {
+                if (controller.signal.aborted) {
+                    return;
+                }
+
+                setHasGitHubConnection(true);
+                const message = error instanceof Error ? error.message : '';
+                if (message !== 'Failed to load repositories') {
                     setErrorMessage('Unable to load GitHub repositories right now.');
                 }
             } finally {
@@ -247,6 +306,35 @@ export default function WorkSpaceBody() {
             controller.abort();
         };
     }, [repositoryState]);
+
+    // Extract dynamic language list from loaded repositories
+    const availableLanguages = useMemo(() => {
+        const languages = new Set<string>();
+        repositories.forEach((repo) => {
+            if (repo.language) {
+                languages.add(repo.language);
+            }
+        });
+        return ['All', ...Array.from(languages).sort()];
+    }, [repositories]);
+
+    // Real-time filtered repositories by search query & language pill
+    const filteredRepositories = useMemo(() => {
+        const query = searchQuery.trim().toLowerCase();
+
+        return repositories.filter((repo) => {
+            const matchesSearch =
+                !query ||
+                repo.name.toLowerCase().includes(query) ||
+                repo.full_name.toLowerCase().includes(query) ||
+                (repo.description && repo.description.toLowerCase().includes(query));
+
+            const matchesLanguage =
+                selectedLanguage === 'All' || repo.language === selectedLanguage;
+
+            return matchesSearch && matchesLanguage;
+        });
+    }, [repositories, searchQuery, selectedLanguage]);
 
     const selectedRepository = repositories.find(
         (repository) => repository.id === selectedRepositoryId
@@ -368,14 +456,19 @@ export default function WorkSpaceBody() {
     const renderRepositorySelection = () => {
         if (isLoadingRepositories) {
             return (
-                <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/20 p-6 shadow-xl backdrop-blur-sm">
-                    <div className="space-y-4 animate-pulse">
-                        <div className="h-4 w-40 rounded bg-zinc-800" />
-                        <div className="grid gap-4 md:grid-cols-2">
-                            <div className="h-28 rounded-xl bg-zinc-900/60" />
-                            <div className="h-28 rounded-xl bg-zinc-900/60" />
-                            <div className="h-28 rounded-xl bg-zinc-900/60" />
-                            <div className="h-28 rounded-xl bg-zinc-900/60" />
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/20 p-6 shadow-xl backdrop-blur-sm">
+                    <div className="space-y-6 animate-pulse">
+                        <div className="flex items-center justify-between">
+                            <div className="h-6 w-48 rounded bg-slate-800" />
+                            <div className="h-10 w-40 rounded bg-slate-800" />
+                        </div>
+                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                            <div className="h-44 rounded-xl border border-slate-800/80 bg-slate-900/50" />
+                            <div className="h-44 rounded-xl border border-slate-800/80 bg-slate-900/50" />
+                            <div className="h-44 rounded-xl border border-slate-800/80 bg-slate-900/50" />
+                            <div className="h-44 rounded-xl border border-slate-800/80 bg-slate-900/50" />
+                            <div className="h-44 rounded-xl border border-slate-800/80 bg-slate-900/50" />
+                            <div className="h-44 rounded-xl border border-slate-800/80 bg-slate-900/50" />
                         </div>
                     </div>
                 </div>
@@ -384,16 +477,16 @@ export default function WorkSpaceBody() {
 
         if (errorMessage) {
             return (
-                <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/20 p-6 shadow-xl backdrop-blur-sm">
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/20 p-6 shadow-xl backdrop-blur-sm">
                     <div className="space-y-4">
                         <div>
-                            <h2 className="text-xl font-semibold text-zinc-100">GitHub repositories unavailable</h2>
-                            <p className="mt-2 text-sm text-zinc-400">{errorMessage}</p>
+                            <h2 className="text-xl font-semibold text-slate-100">GitHub repositories unavailable</h2>
+                            <p className="mt-2 text-sm text-slate-400">{errorMessage}</p>
                         </div>
                         <button
                             type="button"
                             onClick={handleRetry}
-                            className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-zinc-700 bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200"
+                            className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-slate-700 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-950 transition-colors hover:bg-slate-200"
                         >
                             Retry
                         </button>
@@ -404,141 +497,289 @@ export default function WorkSpaceBody() {
 
         if (!repositories.length) {
             return (
-                <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/20 p-6 shadow-xl backdrop-blur-sm">
-                    <div className="space-y-4">
-                        <div>
-                            <h2 className="text-xl font-semibold text-zinc-100">No repositories found</h2>
-                            <p className="mt-2 text-sm text-zinc-400">
-                                We could not find any owned repositories in this GitHub account.
-                            </p>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={handleRetry}
-                            className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-zinc-700 bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200"
-                        >
-                            Refresh
-                        </button>
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/20 p-8 shadow-xl backdrop-blur-sm text-center">
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-slate-800 bg-slate-900 text-slate-400 mb-4">
+                        <FolderGit2 className="h-6 w-6" />
                     </div>
+                    <h2 className="text-xl font-semibold text-slate-100">No repositories found</h2>
+                    <p className="mt-2 text-sm text-slate-400 max-w-md mx-auto">
+                        We could not find any owned repositories in this GitHub account.
+                    </p>
+                    <button
+                        type="button"
+                        onClick={handleRetry}
+                        className="mt-6 inline-flex cursor-pointer items-center justify-center rounded-lg border border-slate-700 bg-slate-100 px-5 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-slate-200 shadow-sm"
+                    >
+                        Refresh repositories
+                    </button>
                 </div>
             );
         }
 
         return (
             <div className="space-y-6">
-                <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/20 p-6 shadow-xl backdrop-blur-sm">
-                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                {/* Header Container */}
+                <div className="rounded-2xl border border-slate-800/80 bg-slate-900/30 p-6 shadow-xl backdrop-blur-sm space-y-6">
+                    {/* Top action row */}
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                         <div>
-                            <h2 className="text-xl font-semibold text-zinc-100">Select one repository</h2>
-                            <p className="mt-1 text-sm text-zinc-400">
-                                Choose a single repository to connect in your workspace.
+                            <h2 className="text-xl font-bold tracking-tight text-white">Select one repository</h2>
+                            <p className="mt-1 text-sm text-slate-400">
+                                Choose a repository from your GitHub account to connect in your workspace.
                             </p>
                         </div>
-                        <button
-                            type="button"
-                            onClick={handleConnectRepository}
-                            disabled={!selectedRepository}
-                            className="inline-flex cursor-pointer items-center justify-center rounded-lg bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
-                        >
-                            Connect Repository
-                        </button>
+                        <div className="flex flex-wrap items-center gap-3">
+                            <DisconnectGitHubButton />
+                            <button
+                                type="button"
+                                onClick={handleConnectRepository}
+                                disabled={!selectedRepository}
+                                className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-slate-100 px-5 py-2 text-sm font-semibold text-slate-950 transition-all hover:bg-slate-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500 shadow-sm"
+                            >
+                                <span>Connect Repository</span>
+                                <ArrowRight className="h-4 w-4" />
+                            </button>
+                        </div>
                     </div>
 
-                    <div className="mt-6 grid gap-4">
-                        {repositories.map((repository) => {
+                    {/* Search and Language Filters */}
+                    <div className="border-t border-slate-800/80 pt-5 space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            {/* Search Input */}
+                            <div className="relative flex-1 max-w-md">
+                                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                                <input
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    placeholder="Search repositories by name or description..."
+                                    className="w-full rounded-xl border border-slate-800 bg-slate-900/90 pl-10 pr-9 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/40 outline-none transition-all"
+                                />
+                                {searchQuery && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setSearchQuery('')}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                                        title="Clear search"
+                                    >
+                                        <X className="h-3.5 w-3.5" />
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Result Counter */}
+                            <div className="text-xs text-slate-400 font-medium">
+                                Showing <span className="text-white font-semibold">{filteredRepositories.length}</span> of {repositories.length} {repositories.length === 1 ? 'repository' : 'repositories'}
+                            </div>
+                        </div>
+
+                        {/* Language Filter Pills */}
+                        {availableLanguages.length > 1 && (
+                            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                <span className="text-xs text-slate-400 mr-1 font-medium">Language:</span>
+                                {availableLanguages.map((lang) => {
+                                    const isActive = selectedLanguage === lang;
+                                    return (
+                                        <button
+                                            key={lang}
+                                            type="button"
+                                            onClick={() => setSelectedLanguage(lang)}
+                                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                                                isActive
+                                                    ? 'bg-emerald-500/15 border border-emerald-500/50 text-emerald-300 shadow-sm'
+                                                    : 'bg-slate-900/70 border border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                                            }`}
+                                        >
+                                            {lang !== 'All' && (
+                                                <span
+                                                    className="h-2 w-2 rounded-full shrink-0"
+                                                    style={{ backgroundColor: LANGUAGE_COLORS[lang] || '#10b981' }}
+                                                />
+                                            )}
+                                            <span>{lang}</span>
+                                        </button>
+                                    );
+                                })}
+
+                                {(searchQuery || selectedLanguage !== 'All') && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSearchQuery('');
+                                            setSelectedLanguage('All');
+                                        }}
+                                        className="text-xs text-slate-400 hover:text-rose-400 underline underline-offset-2 ml-2 transition-colors cursor-pointer"
+                                    >
+                                        Reset filters
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* 3-Column Card Grid Layout */}
+                {filteredRepositories.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {filteredRepositories.map((repository) => {
                             const isSelected = repository.id === selectedRepositoryId;
+                            const langColor = repository.language
+                                ? (LANGUAGE_COLORS[repository.language] || '#10b981')
+                                : '#64748b';
 
                             return (
-                                <label
+                                <div
                                     key={repository.id}
-                                    className={`cursor-pointer rounded-2xl border p-4 transition-all ${isSelected
-                                        ? 'border-emerald-500/60 bg-emerald-500/10'
-                                        : 'border-zinc-800 bg-zinc-950/50 hover:border-zinc-700 hover:bg-zinc-900/70'
-                                        }`}
+                                    onClick={() => setSelectedRepositoryId(repository.id)}
+                                    className={`group relative flex flex-col justify-between rounded-xl border p-5 transition-all duration-200 cursor-pointer select-none ${
+                                        isSelected
+                                            ? 'border-emerald-500/90 bg-emerald-950/25 shadow-lg shadow-emerald-950/30 ring-1 ring-emerald-500/30'
+                                            : 'border-slate-800/90 bg-slate-900/50 hover:border-slate-700 hover:bg-slate-900/80 hover:shadow-md'
+                                    }`}
                                 >
-                                    <div className="flex items-start gap-4">
-                                        <input
-                                            type="radio"
-                                            name="repository-selection"
-                                            checked={isSelected}
-                                            onChange={() => setSelectedRepositoryId(repository.id)}
-                                            className="mt-1 h-4 w-4 border-zinc-600 bg-zinc-950 text-emerald-500 focus:ring-emerald-500"
-                                        />
+                                    {/* Selection badge at top-right corner */}
+                                    {isSelected && (
+                                        <div className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-slate-950 shadow-md ring-2 ring-slate-950">
+                                            <CheckCircle2 className="h-4 w-4" />
+                                        </div>
+                                    )}
 
-                                        <div className="min-w-0 flex-1 space-y-3">
-                                            <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                                                <div className="min-w-0">
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        <h3 className="text-lg font-semibold text-zinc-50">{repository.name}</h3>
-                                                        <span className="rounded-full border border-zinc-700 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wider text-zinc-400">
-                                                            {repository.private ? 'Private' : 'Public'}
-                                                        </span>
-                                                    </div>
-                                                    <p className="mt-1 truncate text-sm text-zinc-400">{repository.full_name}</p>
-                                                </div>
-
-                                                <div className="flex flex-wrap gap-2 text-xs text-zinc-300">
-                                                    <span className="rounded-full bg-zinc-800 px-3 py-1">
-                                                        Default branch: {repository.default_branch}
-                                                    </span>
-                                                    <span className="rounded-full bg-zinc-800 px-3 py-1">
-                                                        Owner: {repository.owner.login}
-                                                    </span>
-                                                </div>
+                                    {/* Top Row: Name and Visibility Badge */}
+                                    <div className="space-y-2">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="min-w-0 flex-1">
+                                                <h3
+                                                    className={`font-semibold text-base tracking-tight truncate transition-colors ${
+                                                        isSelected ? 'text-white' : 'text-slate-100 group-hover:text-emerald-300'
+                                                    }`}
+                                                    title={repository.full_name}
+                                                >
+                                                    {repository.name}
+                                                </h3>
+                                                <p className="text-xs text-slate-400 truncate mt-0.5">
+                                                    {repository.owner.login}
+                                                </p>
                                             </div>
 
-                                            <div className="grid gap-2 text-sm text-zinc-400 sm:grid-cols-3">
-                                                <div>
-                                                    <span className="block text-xs uppercase tracking-wider text-zinc-500">Language</span>
-                                                    <span className="mt-1 block text-zinc-200">
-                                                        {repository.language ?? 'Not available'}
+                                            {/* Visibility Pill */}
+                                            <div className="shrink-0 flex items-center">
+                                                {repository.private ? (
+                                                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-950/40 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+                                                        <Lock className="h-3 w-3" />
+                                                        <span>Private</span>
                                                     </span>
-                                                </div>
-                                                <div>
-                                                    <span className="block text-xs uppercase tracking-wider text-zinc-500">Updated</span>
-                                                    <span className="mt-1 block text-zinc-200">{new Date(repository.updated_at).toLocaleString()}</span>
-                                                </div>
-                                                <div>
-                                                    <span className="block text-xs uppercase tracking-wider text-zinc-500">Description</span>
-                                                    <span className="mt-1 block line-clamp-2 text-zinc-200">
-                                                        {repository.description ?? 'No description available'}
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1 rounded-full border border-slate-700/80 bg-slate-800/60 px-2 py-0.5 text-[10px] font-semibold text-slate-300">
+                                                        <Globe className="h-3 w-3 text-slate-400" />
+                                                        <span>Public</span>
                                                     </span>
-                                                </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Middle Row: Description */}
+                                        <p
+                                            className={`text-xs leading-relaxed line-clamp-2 min-h-[2.5rem] ${
+                                                repository.description ? 'text-slate-300' : 'text-slate-500 italic'
+                                            }`}
+                                        >
+                                            {repository.description || 'No description provided.'}
+                                        </p>
+                                    </div>
+
+                                    {/* Bottom Footer Row */}
+                                    <div className="mt-4 pt-3.5 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400 gap-2">
+                                        {/* Language Badge */}
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                            {repository.language ? (
+                                                <>
+                                                    <span
+                                                        className="h-2 w-2 rounded-full shrink-0"
+                                                        style={{ backgroundColor: langColor }}
+                                                    />
+                                                    <span className="text-slate-300 truncate font-medium">
+                                                        {repository.language}
+                                                    </span>
+                                                </>
+                                            ) : (
+                                                <span className="text-slate-500">Plain text</span>
+                                            )}
+                                        </div>
+
+                                        <div className="flex items-center gap-3 shrink-0">
+                                            {/* Default branch */}
+                                            <div className="flex items-center gap-1 text-[11px] text-slate-400 font-mono">
+                                                <GitBranch className="h-3 w-3 text-slate-500" />
+                                                <span>{repository.default_branch}</span>
+                                            </div>
+
+                                            {/* Updated date */}
+                                            <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                                                <Clock className="h-3 w-3 text-slate-500" />
+                                                <span>{formatRelativeDate(repository.updated_at)}</span>
                                             </div>
                                         </div>
                                     </div>
-                                </label>
+                                </div>
                             );
                         })}
                     </div>
-                </div>
+                ) : (
+                    /* Search empty state */
+                    <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-900/30 p-12 text-center">
+                        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-slate-800 bg-slate-900 text-slate-400 mb-4">
+                            <Search className="h-6 w-6" />
+                        </div>
+                        <h3 className="text-base font-semibold text-slate-200">No matching repositories</h3>
+                        <p className="mt-1 text-xs text-slate-400 max-w-sm mx-auto">
+                            No repositories match &quot;{searchQuery}&quot;
+                            {selectedLanguage !== 'All' ? ` with language ${selectedLanguage}` : ''}.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setSearchQuery('');
+                                setSelectedLanguage('All');
+                            }}
+                            className="mt-5 inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer shadow-sm"
+                        >
+                            <X className="h-3.5 w-3.5" />
+                            <span>Clear search &amp; filters</span>
+                        </button>
+                    </div>
+                )}
             </div>
         );
     };
 
     const renderLoadingState = () => (
-        <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/20 p-6 shadow-xl backdrop-blur-sm">
-            <div className="space-y-4 animate-pulse">
-                <div className="h-4 w-40 rounded bg-zinc-800" />
-                <div className="grid gap-4 md:grid-cols-2">
-                    <div className="h-28 rounded-xl bg-zinc-900/60" />
-                    <div className="h-28 rounded-xl bg-zinc-900/60" />
-                    <div className="h-28 rounded-xl bg-zinc-900/60" />
-                    <div className="h-28 rounded-xl bg-zinc-900/60" />
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/20 p-6 shadow-xl backdrop-blur-sm">
+            <div className="space-y-6 animate-pulse">
+                <div className="flex items-center justify-between">
+                    <div className="h-6 w-48 rounded bg-slate-800" />
+                    <div className="h-10 w-40 rounded bg-slate-800" />
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <div className="h-44 rounded-xl border border-slate-800/80 bg-slate-900/50" />
+                    <div className="h-44 rounded-xl border border-slate-800/80 bg-slate-900/50" />
+                    <div className="h-44 rounded-xl border border-slate-800/80 bg-slate-900/50" />
+                    <div className="h-44 rounded-xl border border-slate-800/80 bg-slate-900/50" />
+                    <div className="h-44 rounded-xl border border-slate-800/80 bg-slate-900/50" />
+                    <div className="h-44 rounded-xl border border-slate-800/80 bg-slate-900/50" />
                 </div>
             </div>
         </div>
     );
 
     return (
-        <main className="min-h-[calc(100vh-73px)] bg-zinc-950 text-zinc-100 p-4 sm:p-6 lg:p-8">
+        <main className="min-h-[calc(100vh-73px)] bg-slate-950 text-slate-100 p-4 sm:p-6 lg:p-8">
             <div className="mx-auto w-full max-w-[1500px] space-y-8">
-                <div className="mb-6 flex items-center justify-between border-b border-zinc-800/80 pb-5">
-                    <h1 className="text-sm font-bold tracking-widest text-zinc-400 uppercase">
+                <div className="mb-6 flex items-center justify-between border-b border-slate-800/80 pb-5">
+                    <h1 className="text-sm font-bold tracking-widest text-slate-400 uppercase">
                         Workspace
                     </h1>
-                    <p className="text-zinc-400">
-                        Remaining Credits: {userDetail?.credits}
+                    <p className="text-slate-400">
+                        Remaining Credits: <span className="text-slate-200 font-semibold">{userDetail?.credits}</span>
                     </p>
                 </div>
 
@@ -552,16 +793,16 @@ export default function WorkSpaceBody() {
                 )}
 
                 {repositoryState === 'error' && (
-                    <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/20 p-6 shadow-xl backdrop-blur-sm">
+                    <div className="rounded-2xl border border-slate-800/80 bg-slate-900/30 p-6 shadow-xl backdrop-blur-sm">
                         <div className="space-y-4">
                             <div>
-                                <h2 className="text-xl font-semibold text-zinc-100">Workspace unavailable</h2>
-                                <p className="mt-2 text-sm text-zinc-400">{repositoryError ?? 'Unable to load the connected repository right now.'}</p>
+                                <h2 className="text-xl font-semibold text-slate-100">Workspace unavailable</h2>
+                                <p className="mt-2 text-sm text-slate-400">{repositoryError ?? 'Unable to load the connected repository right now.'}</p>
                             </div>
                             <button
                                 type="button"
                                 onClick={() => window.location.reload()}
-                                className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-zinc-700 bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200"
+                                className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-slate-700 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-950 transition-colors hover:bg-slate-200"
                             >
                                 Refresh page
                             </button>
