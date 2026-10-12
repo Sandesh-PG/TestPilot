@@ -178,7 +178,8 @@ export async function executeTestCase(
     let sessionId = "unknown";
     let sessionUrl = "";
 
-    const isApiTest = testCase.type.toLowerCase() === "api" || testCase.targetRoute.startsWith("/api");
+    // STRICT PROTOCOL SEPARATION: Only execute page.request.fetch when testCase.type is 'api'
+    const isApiTest = testCase.type?.toLowerCase() === "api";
     const detectedMethod = detectHttpMethod(`${testCase.title} ${testCase.description || ""} ${testCase.targetRoute}`);
 
     logs.push(formatLog(`🚀 Initializing test run for: "${testCase.title}"`));
@@ -225,6 +226,13 @@ export async function executeTestCase(
 
             const steps = parseActionSteps(testCase.actionSteps);
 
+            // Determine if any step intentionally expects an HTTP error (e.g. 404 in edge-case tests)
+            const isExpectingHttpError = steps.some(
+                (s) =>
+                    s.action === "assertResponse" &&
+                    parseExpectedStatusCode([s.expected, s.target, s.value, s.description]) >= 400
+            );
+
             if (steps.length === 0) {
                 // Default fallback execution if no action steps are specified
                 logs.push(formatLog("ℹ️ No action steps provided. Running default route check..."));
@@ -254,7 +262,7 @@ export async function executeTestCase(
                     const pageTitle = await page.title();
                     logs.push(formatLog(`📄 Page title: "${pageTitle}"`));
                     if (lastResponseStatus >= 400) {
-                        throw new Error(`Page returned HTTP ${lastResponseStatus}`);
+                        throw new Error(`Navigation failed: Server responded with HTTP ${lastResponseStatus}`);
                     }
                 }
             } else {
@@ -271,10 +279,8 @@ export async function executeTestCase(
                             const targetPath = step.target || step.value || testCase.targetRoute;
                             const fullTargetUrl = resolveTargetUrl(repositoryUrl, targetPath);
 
-                            // Detect if this specific navigate step targets an API route
-                            const isStepApi = isApiTest || targetPath.startsWith("/api") || (detectedMethod !== "GET");
-
-                            if (isStepApi) {
+                            // STRICT PROTOCOL SEPARATION: Only API tests execute headless request
+                            if (isApiTest) {
                                 const method = detectHttpMethod(`${step.description} ${testCase.title} ${targetPath}`);
                                 logs.push(formatLog(`   📡 [API Request Context] ${method} ${fullTargetUrl}`));
 
@@ -314,6 +320,14 @@ export async function executeTestCase(
                                 lastResponseStatus = navResponse?.status() ?? 200;
                                 lastResponseUrl = page.url();
                                 logs.push(formatLog(`   Reached: ${lastResponseUrl} (Status: ${lastResponseStatus})`));
+
+                                // UI Navigations Passing on Server Crashes (Test #14):
+                                // If status >= 400, fail immediately unless test explicitly expects an HTTP error
+                                if (lastResponseStatus >= 400) {
+                                    if (testCase.type?.toLowerCase() === "ui" || testCase.type?.toLowerCase() === "form" || !isExpectingHttpError) {
+                                        throw new Error(`Navigation failed: Server responded with HTTP ${lastResponseStatus}`);
+                                    }
+                                }
                             }
                             break;
                         }
@@ -529,8 +543,8 @@ export async function executeTestCase(
                                 step.description,
                             ]);
 
-                            // 2. If no response was recorded yet or target specifies an explicit endpoint, issue request
-                            if (lastResponseStatus === null || (step.target && (step.target.startsWith("/api") || step.target.startsWith("http")))) {
+                            // STRICT PROTOCOL SEPARATION: Only execute fetch for API tests if response not yet recorded
+                            if (isApiTest && (lastResponseStatus === null || (step.target && (step.target.startsWith("/api") || step.target.startsWith("http"))))) {
                                 const endpointUrl = resolveTargetUrl(repositoryUrl, step.target || testCase.targetRoute);
                                 const method = detectHttpMethod(`${step.description} ${testCase.title} ${step.target || ""}`);
                                 logs.push(formatLog(`   📡 Executing ${method} request to: ${endpointUrl}`));
@@ -565,12 +579,12 @@ export async function executeTestCase(
                             const actualStatus = lastResponseStatus;
                             logs.push(formatLog(`   Comparing status: expected ${expectedStatus}, received ${actualStatus}`));
 
-                            // 3. Strict status code comparison
+                            // Strict status code comparison
                             if (actualStatus !== expectedStatus) {
                                 throw new Error(`Assertion failed: Expected status ${expectedStatus}, received ${actualStatus}`);
                             }
 
-                            // 4. Verify body expectation if non-numeric expected text is present
+                            // Verify body expectation if non-numeric expected text is present
                             const expectedBodyText = step.expected && !/^\d{3}$/.test(step.expected.trim()) ? step.expected.trim() : null;
                             if (expectedBodyText && lastResponseBody) {
                                 if (!lastResponseBody.toLowerCase().includes(expectedBodyText.toLowerCase())) {
