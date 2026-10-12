@@ -38,6 +38,7 @@ export const repositories = pgTable(
     isPrivate: boolean("is_private").notNull().default(false),
     description: text("description"),
     language: text("language"),
+    targetEnvironmentUrl: text("target_environment_url").default("http://localhost:3000"),
     connectedAt: timestamp("connected_at").defaultNow().notNull(),
     lastSync: timestamp("last_sync"),
   },
@@ -67,6 +68,8 @@ export const testCases = pgTable("test_cases", {
   targetFiles: jsonb("target_files").notNull(),
 
   expectedResult: text("expected_result").notNull(),
+
+  actionSteps: jsonb("action_steps"),
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

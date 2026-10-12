@@ -54,6 +54,7 @@ function isDuplicateKeyError(error: unknown) {
 function serializeRepository(repository: (typeof repositories.$inferSelect)) {
     return {
         id: repository.githubRepoId,
+        databaseId: repository.id,
         name: repository.name,
         full_name: repository.fullName,
         owner: {
@@ -64,6 +65,7 @@ function serializeRepository(repository: (typeof repositories.$inferSelect)) {
         private: repository.isPrivate,
         description: repository.description ?? null,
         language: repository.language ?? null,
+        targetEnvironmentUrl: repository.targetEnvironmentUrl ?? 'http://localhost:3000',
         updated_at: repository.connectedAt ? repository.connectedAt.toISOString() : new Date().toISOString(),
         connected_at: repository.connectedAt ? repository.connectedAt.toISOString() : null,
         last_sync: repository.lastSync ? repository.lastSync.toISOString() : null,

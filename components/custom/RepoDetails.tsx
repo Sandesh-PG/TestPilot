@@ -2,18 +2,29 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
+    AlertCircle,
+    Check,
     CheckCircle2,
+    ChevronDown,
+    ChevronUp,
     Clock3,
     ExternalLink,
     FileCode2,
     GitBranch,
+    Globe,
+    Play,
     RefreshCw,
+    Server,
     Sparkles,
+    Terminal,
     Trash2,
+    XCircle,
 } from 'lucide-react';
 
 type RepoDetailsProps = {
     repo: {
+        id?: number;
+        databaseId?: number;
         name: string;
         full_name: string;
         owner: {
@@ -24,6 +35,7 @@ type RepoDetailsProps = {
         private: boolean;
         description: string | null;
         language: string | null;
+        targetEnvironmentUrl?: string | null;
         updated_at: string;
         branchCount?: number;
         testCount?: number;
@@ -53,7 +65,17 @@ type RepositoryFileContent = {
     reason?: string;
 };
 
+type ActionStep = {
+    order: number;
+    action: string;
+    target?: string;
+    value?: string;
+    expected?: string;
+    description: string;
+};
+
 type GeneratedTestCase = {
+    id?: number;
     title: string;
     description: string;
     type: string;
@@ -61,6 +83,19 @@ type GeneratedTestCase = {
     targetRoute: string;
     targetFiles: string[];
     expectedResult: string;
+    category?: string;
+    actionSteps?: ActionStep[];
+};
+
+type TestCaseExecution = {
+    testCaseId: number;
+    status: 'pending' | 'running' | 'passed' | 'failed';
+    sessionId?: string;
+    sessionUrl?: string;
+    logs?: string[];
+    error?: string;
+    durationMs?: number;
+    completedAt?: string;
 };
 
 const MAX_PREVIEW_LENGTH = 30000;
@@ -107,6 +142,25 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
     const [generatedTestCases, setGeneratedTestCases] = useState<GeneratedTestCase[]>([]);
     const fileRequestIdRef = useRef(0);
 
+    // Environment URL & Execution State
+    const [targetEnvUrl, setTargetEnvUrl] = useState<string>(repo.targetEnvironmentUrl || 'http://localhost:3000');
+    const [isSavingEnvUrl, setIsSavingEnvUrl] = useState(false);
+    const [envUrlSavedMessage, setEnvUrlSavedMessage] = useState<string | null>(null);
+    const [envUrlError, setEnvUrlError] = useState<string | null>(null);
+
+    const [executions, setExecutions] = useState<Record<number, TestCaseExecution>>({});
+    const [runningTestIds, setRunningTestIds] = useState<Set<number>>(new Set());
+    const [isRunningAll, setIsRunningAll] = useState(false);
+    const [expandedLogIds, setExpandedLogIds] = useState<Set<number>>(new Set());
+
+    // Update targetEnvUrl if repo prop changes
+    useEffect(() => {
+        if (repo.targetEnvironmentUrl) {
+            setTargetEnvUrl(repo.targetEnvironmentUrl);
+        }
+    }, [repo.targetEnvironmentUrl]);
+
+    // Load branch list
     useEffect(() => {
         let isMounted = true;
         const controller = new AbortController();
@@ -128,16 +182,18 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
 
                 if (!response.ok) {
                     const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-                    throw new Error(payload?.error ?? 'Unable to load repository branches.');
+                    throw new Error(payload?.error ?? 'Unable to load branches.');
                 }
 
-                const payload = (await response.json()) as { branches?: GitHubBranch[] };
-                const nextBranches = payload.branches ?? [];
+                const payload = (await response.json()) as {
+                    branches?: GitHubBranch[];
+                };
 
                 if (!isMounted) {
                     return;
                 }
 
+                const nextBranches = payload.branches ?? [];
                 setBranches(nextBranches);
 
                 const preferredBranch = nextBranches.some((branch) => branch.name === repo.default_branch)
@@ -167,6 +223,7 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
         };
     }, [repo.default_branch, repo.name, repo.owner.login]);
 
+    // Load file tree for branch
     useEffect(() => {
         if (!selectedBranch) {
             setFileTree([]);
@@ -212,13 +269,18 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
                     return;
                 }
 
-                setFileTree(payload.files ?? []);
+                const nextFiles = payload.files ?? [];
+                setFileTree(nextFiles);
+
+                if (nextFiles[0]) {
+                    setSelectedFile(nextFiles[0].path);
+                }
             } catch (error) {
                 if (!isMounted) {
                     return;
                 }
 
-                setTreeError(error instanceof Error ? error.message : 'Unable to load the repository tree.');
+                setTreeError(error instanceof Error ? error.message : 'Unable to load repository tree.');
                 setFileTree([]);
             } finally {
                 if (isMounted) {
@@ -235,85 +297,193 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
         };
     }, [repo.name, repo.owner.login, selectedBranch]);
 
-    const handleFileSelection = async (filePath: string) => {
-        if (!selectedBranch || !filePath) {
+    // Load selected file content
+    useEffect(() => {
+        if (!selectedFile || !selectedBranch) {
+            setFileContent(null);
+            setFilePreviewError(null);
             return;
         }
 
+        let isMounted = true;
+        const controller = new AbortController();
         const requestId = ++fileRequestIdRef.current;
-        setSelectedFile(filePath);
-        setFileContent(null);
-        setFilePreviewError(null);
-        setIsLoadingFile(true);
 
-        try {
-            const params = new URLSearchParams({
-                owner: repo.owner.login,
-                repo: repo.name,
-                branch: selectedBranch,
-                path: filePath,
-            });
+        const loadFileContent = async () => {
+            setIsLoadingFile(true);
+            setFilePreviewError(null);
 
-            const response = await fetch(`/api/github/files?${params.toString()}`, {
-                method: 'GET',
-            });
+            try {
+                const params = new URLSearchParams({
+                    owner: repo.owner.login,
+                    repo: repo.name,
+                    branch: selectedBranch,
+                    path: selectedFile,
+                });
 
-            if (!response.ok) {
-                const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-                const message = payload?.error ?? 'Unable to load file content.';
-                if (requestId !== fileRequestIdRef.current) {
+                const response = await fetch(`/api/github/file?${params.toString()}`, {
+                    method: 'GET',
+                    signal: controller.signal,
+                });
+
+                if (!response.ok) {
+                    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+                    const message = payload?.error ?? 'Unable to load file content.';
+                    if (requestId !== fileRequestIdRef.current || !isMounted) {
+                        return;
+                    }
+
+                    setFilePreviewError(message);
+                    setFileContent(null);
                     return;
                 }
 
-                setFilePreviewError(message);
+                const payload = (await response.json()) as (RepositoryFileContent & {
+                    files?: RepositoryFileContent[];
+                    file?: RepositoryFileContent;
+                });
+
+                if (requestId !== fileRequestIdRef.current || !isMounted) {
+                    return;
+                }
+
+                const fileObj = (payload.files && payload.files[0]) || payload.file || payload;
+
+                if (fileObj.skipped) {
+                    setFilePreviewError(formatReason(fileObj.reason));
+                    setFileContent(null);
+                    return;
+                }
+
+                if (typeof fileObj.content !== 'string') {
+                    setFilePreviewError('This file does not contain previewable text content.');
+                    setFileContent(null);
+                    return;
+                }
+
+                const normalizedContent = fileObj.content.length > MAX_PREVIEW_LENGTH
+                    ? `${fileObj.content.slice(0, MAX_PREVIEW_LENGTH)}\n\n... content truncated for preview ...`
+                    : fileObj.content;
+
+                setFileContent(normalizedContent);
+            } catch (error) {
+                if (requestId !== fileRequestIdRef.current || !isMounted) {
+                    return;
+                }
+
+                setFilePreviewError(error instanceof Error ? error.message : 'Unable to load file content.');
                 setFileContent(null);
-                return;
+            } finally {
+                if (requestId === fileRequestIdRef.current && isMounted) {
+                    setIsLoadingFile(false);
+                }
+            }
+        };
+
+        void loadFileContent();
+
+        return () => {
+            isMounted = false;
+            controller.abort();
+        };
+    }, [repo.name, repo.owner.login, selectedBranch, selectedFile]);
+
+    // Load recent executions for this repository on mount
+    useEffect(() => {
+        const repoIdentifier = repo.databaseId || repo.id;
+        if (!repoIdentifier) return;
+
+        const fetchExecutions = async () => {
+            try {
+                const res = await fetch(`/api/browserbase/playwright-test?repositoryId=${repoIdentifier}`);
+                if (res.ok) {
+                    const data = (await res.json()) as {
+                        executions?: {
+                            testCaseId: number;
+                            status: 'pending' | 'running' | 'passed' | 'failed';
+                            sessionId?: string;
+                            sessionUrl?: string;
+                            logs?: string | null;
+                            error?: string | null;
+                            completedAt?: string;
+                        }[];
+                    };
+
+                    if (Array.isArray(data.executions)) {
+                        setExecutions((prev) => {
+                            const next = { ...prev };
+                            for (const exec of data.executions || []) {
+                                if (!next[exec.testCaseId]) {
+                                    next[exec.testCaseId] = {
+                                        testCaseId: exec.testCaseId,
+                                        status: exec.status,
+                                        sessionId: exec.sessionId,
+                                        sessionUrl: exec.sessionUrl,
+                                        logs: typeof exec.logs === 'string' ? exec.logs.split('\n') : [],
+                                        error: exec.error || undefined,
+                                        completedAt: exec.completedAt,
+                                    };
+                                }
+                            }
+                            return next;
+                        });
+                    }
+                }
+            } catch {
+                // non-blocking
+            }
+        };
+
+        void fetchExecutions();
+    }, [repo.databaseId, repo.id]);
+
+    const handleFileSelection = (filePath: string) => {
+        setSelectedFile(filePath);
+    };
+
+    const handleSaveTargetEnvUrl = async (overrideUrl?: string) => {
+        const urlToSave = (overrideUrl || targetEnvUrl).trim();
+
+        if (!urlToSave) {
+            setEnvUrlError('Target environment URL cannot be empty.');
+            return;
+        }
+
+        try {
+            const parsed = new URL(urlToSave);
+            if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+                throw new Error();
+            }
+        } catch {
+            setEnvUrlError('Please enter a valid HTTP or HTTPS URL (e.g. http://localhost:3000 or https://preview.myapp.com).');
+            return;
+        }
+
+        setIsSavingEnvUrl(true);
+        setEnvUrlError(null);
+        setEnvUrlSavedMessage(null);
+
+        const repoIdentifier = repo.databaseId || repo.id;
+
+        try {
+            const response = await fetch(`/api/repositories/${repoIdentifier}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ targetEnvironmentUrl: urlToSave }),
+            });
+
+            if (!response.ok) {
+                const data = (await response.json().catch(() => null)) as { error?: string } | null;
+                throw new Error(data?.error || 'Failed to update target environment URL.');
             }
 
-            const payload = (await response.json()) as {
-                files?: RepositoryFileContent[];
-            };
-
-            const selectedFileResult = payload.files?.find((file) => file.path === filePath) ?? null;
-
-            if (requestId !== fileRequestIdRef.current) {
-                return;
-            }
-
-            if (!selectedFileResult) {
-                setFilePreviewError('The selected file is not available for preview.');
-                setFileContent(null);
-                return;
-            }
-
-            if (selectedFileResult.skipped) {
-                setFilePreviewError(formatReason(selectedFileResult.reason));
-                setFileContent(null);
-                return;
-            }
-
-            if (typeof selectedFileResult.content !== 'string') {
-                setFilePreviewError('This file does not contain previewable text content.');
-                setFileContent(null);
-                return;
-            }
-
-            const normalizedContent = selectedFileResult.content.length > MAX_PREVIEW_LENGTH
-                ? `${selectedFileResult.content.slice(0, MAX_PREVIEW_LENGTH)}\n\n... content truncated for preview ...`
-                : selectedFileResult.content;
-
-            setFileContent(normalizedContent);
-        } catch (error) {
-            if (requestId !== fileRequestIdRef.current) {
-                return;
-            }
-
-            setFilePreviewError(error instanceof Error ? error.message : 'Unable to load file content.');
-            setFileContent(null);
+            setTargetEnvUrl(urlToSave);
+            setEnvUrlSavedMessage('Target environment URL saved successfully!');
+            setTimeout(() => setEnvUrlSavedMessage(null), 4000);
+        } catch (err) {
+            setEnvUrlError(err instanceof Error ? err.message : 'Failed to update target URL.');
         } finally {
-            if (requestId === fileRequestIdRef.current) {
-                setIsLoadingFile(false);
-            }
+            setIsSavingEnvUrl(false);
         }
     };
 
@@ -354,10 +524,184 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
         }
     };
 
+    const handleRunSingleTest = async (testCase: GeneratedTestCase, index: number) => {
+        const testId = testCase.id ?? index;
+
+        setRunningTestIds((prev) => new Set(prev).add(testId));
+        setExpandedLogIds((prev) => new Set(prev).add(testId));
+
+        setExecutions((prev) => ({
+            ...prev,
+            [testId]: {
+                testCaseId: testId,
+                status: 'running',
+                logs: [
+                    `[${new Date().toLocaleTimeString()}] 🚀 Initiating cloud test run...`,
+                    `[${new Date().toLocaleTimeString()}] 🎯 Target: ${targetEnvUrl}`,
+                    `[${new Date().toLocaleTimeString()}] 📍 Route: ${testCase.targetRoute}`,
+                ],
+            },
+        }));
+
+        try {
+            const response = await fetch('/api/browserbase/playwright-test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    testCaseId: testCase.id,
+                    repositoryId: repo.databaseId || repo.id,
+                    appUrl: targetEnvUrl,
+                }),
+            });
+
+            const data = (await response.json().catch(() => null)) as {
+                success?: boolean;
+                execution?: {
+                    status: 'pending' | 'running' | 'passed' | 'failed';
+                    sessionId?: string;
+                    sessionUrl?: string;
+                    logs?: string;
+                    error?: string;
+                    completedAt?: string;
+                };
+                sessionId?: string;
+                sessionUrl?: string;
+                logs?: string[];
+                error?: string;
+                durationMs?: number;
+            } | null;
+
+            if (!response.ok || !data) {
+                throw new Error(data?.error || 'Execution failed on server.');
+            }
+
+            const rawLogs = data.logs || (typeof data.execution?.logs === 'string' ? data.execution.logs.split('\n') : []);
+
+            setExecutions((prev) => ({
+                ...prev,
+                [testId]: {
+                    testCaseId: testId,
+                    status: data.execution?.status || (data.success ? 'passed' : 'failed'),
+                    sessionId: data.sessionId || data.execution?.sessionId,
+                    sessionUrl: data.sessionUrl || data.execution?.sessionUrl,
+                    logs: rawLogs.length > 0 ? rawLogs : ['Execution completed.'],
+                    error: data.error || data.execution?.error,
+                    durationMs: data.durationMs,
+                    completedAt: data.execution?.completedAt,
+                },
+            }));
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : 'Execution failed';
+            setExecutions((prev) => ({
+                ...prev,
+                [testId]: {
+                    testCaseId: testId,
+                    status: 'failed',
+                    error: msg,
+                    logs: [`[${new Date().toLocaleTimeString()}] ❌ Failed: ${msg}`],
+                },
+            }));
+        } finally {
+            setRunningTestIds((prev) => {
+                const next = new Set(prev);
+                next.delete(testId);
+                return next;
+            });
+        }
+    };
+
+    const handleRunAllTests = async () => {
+        if (generatedTestCases.length === 0 || isRunningAll) return;
+
+        setIsRunningAll(true);
+        const allIds = generatedTestCases.map((tc, idx) => tc.id ?? idx);
+        setRunningTestIds(new Set(allIds));
+
+        // Mark all as running
+        setExecutions((prev) => {
+            const next = { ...prev };
+            for (const id of allIds) {
+                next[id] = {
+                    testCaseId: id,
+                    status: 'running',
+                    logs: [`[${new Date().toLocaleTimeString()}] Batch execution initiated...`],
+                };
+            }
+            return next;
+        });
+
+        try {
+            const response = await fetch('/api/browserbase/playwright-test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    repositoryId: repo.databaseId || repo.id,
+                    runAll: true,
+                    appUrl: targetEnvUrl,
+                }),
+            });
+
+            const data = (await response.json().catch(() => null)) as {
+                success?: boolean;
+                executions?: {
+                    testCaseId: number;
+                    status: 'pending' | 'running' | 'passed' | 'failed';
+                    execution?: {
+                        status: 'pending' | 'running' | 'passed' | 'failed';
+                        sessionId?: string;
+                        sessionUrl?: string;
+                        logs?: string;
+                        error?: string;
+                        completedAt?: string;
+                    };
+                }[];
+            } | null;
+
+            if (response.ok && Array.isArray(data?.executions)) {
+                setExecutions((prev) => {
+                    const next = { ...prev };
+                    for (const report of data.executions || []) {
+                        const testId = report.testCaseId;
+                        next[testId] = {
+                            testCaseId: testId,
+                            status: report.status || report.execution?.status || 'passed',
+                            sessionId: report.execution?.sessionId,
+                            sessionUrl: report.execution?.sessionUrl,
+                            logs: typeof report.execution?.logs === 'string'
+                                ? report.execution.logs.split('\n')
+                                : ['Execution finished.'],
+                            error: report.execution?.error,
+                            completedAt: report.execution?.completedAt,
+                        };
+                    }
+                    return next;
+                });
+            }
+        } catch (error) {
+            console.error('Failed to run all tests:', error);
+        } finally {
+            setIsRunningAll(false);
+            setRunningTestIds(new Set());
+        }
+    };
+
+    const toggleLogs = (testId: number) => {
+        setExpandedLogIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(testId)) {
+                next.delete(testId);
+            } else {
+                next.add(testId);
+            }
+            return next;
+        });
+    };
+
     const previewContent = fileContent ?? '';
 
     return (
         <section className="space-y-6">
+            {/* Top Repository Header Card */}
             <div className="rounded-2xl border border-emerald-900/40 bg-emerald-950/20 p-6 shadow-xl backdrop-blur-sm lg:p-8">
                 <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
                     <div className="space-y-3">
@@ -426,6 +770,89 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
                 </div>
             </div>
 
+            {/* Target Environment URL Configuration Bar */}
+            <div className="rounded-2xl border border-slate-800/80 bg-slate-900/30 p-6 shadow-xl backdrop-blur-sm lg:p-7">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-400/80">
+                            <Globe className="h-4 w-4" />
+                            Target Environment Configuration
+                        </div>
+                        <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-100">
+                            Application Deployment / Localhost URL
+                        </h3>
+                        <p className="mt-1 text-sm text-slate-400">
+                            Cloud browsers will execute automated Playwright actions against this base environment.
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            Browserbase Cloud Ready
+                        </span>
+                    </div>
+                </div>
+
+                <div className="mt-5 space-y-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <div className="relative flex-1">
+                            <Server className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                            <input
+                                type="url"
+                                value={targetEnvUrl}
+                                onChange={(e) => setTargetEnvUrl(e.target.value)}
+                                placeholder="http://localhost:3000 or https://preview.myapp.com"
+                                className="h-11 w-full rounded-lg border border-slate-700 bg-slate-950/80 pl-10 pr-4 text-sm font-mono text-slate-100 placeholder-slate-500 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+                            />
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => void handleSaveTargetEnvUrl()}
+                            disabled={isSavingEnvUrl}
+                            className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-emerald-400 px-5 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            {isSavingEnvUrl ? (
+                                <RefreshCw className="h-4 w-4 animate-spin" />
+                            ) : (
+                                <Check className="h-4 w-4" />
+                            )}
+                            Save URL
+                        </button>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="text-slate-500">Quick presets:</span>
+                        {['http://localhost:3000', 'http://localhost:5173', 'https://preview.myapp.com'].map((preset) => (
+                            <button
+                                key={preset}
+                                type="button"
+                                onClick={() => {
+                                    setTargetEnvUrl(preset);
+                                    void handleSaveTargetEnvUrl(preset);
+                                }}
+                                className="cursor-pointer rounded border border-slate-800 bg-slate-900/80 px-2.5 py-1 text-slate-300 font-mono transition hover:border-emerald-500/40 hover:text-emerald-300"
+                            >
+                                {preset}
+                            </button>
+                        ))}
+                    </div>
+
+                    {envUrlSavedMessage && (
+                        <div className="flex items-center gap-2 text-xs text-emerald-400">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            {envUrlSavedMessage}
+                        </div>
+                    )}
+                    {envUrlError && (
+                        <div className="flex items-center gap-2 text-xs text-rose-400">
+                            <AlertCircle className="h-3.5 w-3.5" />
+                            {envUrlError}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Branch and Repository Inspection Card */}
             <div className="rounded-2xl border border-slate-800/80 bg-slate-900/20 p-6 shadow-xl backdrop-blur-sm lg:p-8">
                 <div className="flex flex-col gap-5 border-b border-slate-800/80 pb-6 md:flex-row md:items-start md:justify-between">
                     <div>
@@ -556,27 +983,50 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
                 </div>
             </div>
 
+            {/* AI Test Planning & Cloud Execution Section */}
             <div className="rounded-2xl border border-slate-800/80 bg-slate-900/20 p-6 shadow-xl backdrop-blur-sm lg:p-8">
                 <div className="flex flex-col gap-5 border-b border-slate-800/80 pb-6 md:flex-row md:items-center md:justify-between">
                     <div>
                         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-400/80">
                             <Sparkles className="h-4 w-4" />
-                            AI test planning
+                            AI Test Planning & Cloud Execution
                         </div>
-                        <h3 className="mt-3 text-2xl font-semibold tracking-tight text-slate-100">Test generation</h3>
+                        <h3 className="mt-3 text-2xl font-semibold tracking-tight text-slate-100">Test Generation & Playwright Suite</h3>
                         <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-                            Repository-level generation from the currently selected branch and repository context.
+                            AST-grounded, categorized Playwright test cases executed via Browserbase cloud browsers.
                         </p>
                     </div>
-                    <button
-                        type="button"
-                        onClick={() => void handleGenerateTests()}
-                        disabled={!selectedBranch || isGeneratingTests}
-                        className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-emerald-400 px-5 py-2.5 text-sm font-semibold text-emerald-950 shadow-lg shadow-emerald-950/30 transition-colors hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500 disabled:shadow-none"
-                    >
-                        <Sparkles className="h-4 w-4" />
-                        {isGeneratingTests ? 'Generating...' : 'Generate Test Cases'}
-                    </button>
+                    <div className="flex flex-wrap items-center gap-3">
+                        <button
+                            type="button"
+                            onClick={() => void handleGenerateTests()}
+                            disabled={!selectedBranch || isGeneratingTests}
+                            className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-emerald-400 px-5 py-2.5 text-sm font-semibold text-emerald-950 shadow-lg shadow-emerald-950/30 transition-colors hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500 disabled:shadow-none"
+                        >
+                            <Sparkles className="h-4 w-4" />
+                            {isGeneratingTests ? 'Generating...' : 'Generate Test Cases'}
+                        </button>
+                        {generatedTestCases.length > 0 && (
+                            <button
+                                type="button"
+                                onClick={() => void handleRunAllTests()}
+                                disabled={isRunningAll}
+                                className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-5 py-2.5 text-sm font-semibold text-emerald-300 shadow-lg transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {isRunningAll ? (
+                                    <>
+                                        <RefreshCw className="h-4 w-4 animate-spin text-emerald-400" />
+                                        Running Suite...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Play className="h-4 w-4 fill-emerald-300" />
+                                        Run All Tests
+                                    </>
+                                )}
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 {generationError ? (
@@ -587,44 +1037,220 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
 
                 {generatedTestCases.length > 0 ? (
                     <div className="mt-6 grid gap-4">
-                        {generatedTestCases.map((testCase, index) => (
-                            <article key={`${testCase.title}-${index}`} className="rounded-xl border border-slate-800 bg-slate-950/60 p-5 lg:p-6">
-                                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                                    <div>
-                                        <div className="text-xs uppercase tracking-[0.18em] text-slate-500">#{index + 1}</div>
-                                        <h4 className="mt-2 text-lg font-semibold text-slate-100">{testCase.title}</h4>
-                                    </div>
-                                    <div className="flex flex-wrap gap-2 text-[11px] font-medium uppercase tracking-wider">
-                                        <span className="rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-slate-300">
-                                            {testCase.type}
-                                        </span>
-                                        <span className="rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-slate-300">
-                                            {testCase.priority}
-                                        </span>
-                                    </div>
-                                </div>
+                        {generatedTestCases.map((testCase, index) => {
+                            const testId = testCase.id ?? index;
+                            const execution = executions[testId];
+                            const isThisRunning = runningTestIds.has(testId);
+                            const isLogsExpanded = expandedLogIds.has(testId);
 
-                                <p className="mt-3 text-sm text-slate-300">{testCase.description}</p>
+                            return (
+                                <article key={`${testCase.title}-${index}`} className="rounded-xl border border-slate-800 bg-slate-950/60 p-5 lg:p-6 transition hover:border-slate-700/80">
+                                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                        <div>
+                                            <div className="text-xs uppercase tracking-[0.18em] text-slate-500">#{index + 1}</div>
+                                            <h4 className="mt-2 text-lg font-semibold text-slate-100">{testCase.title}</h4>
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            {/* Category Pill */}
+                                            {testCase.category ? (
+                                                <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wider text-emerald-300">
+                                                    {testCase.category}
+                                                </span>
+                                            ) : null}
+                                            <span className="rounded-full border border-slate-700 bg-slate-900 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wider text-slate-300">
+                                                {testCase.type}
+                                            </span>
+                                            <span className="rounded-full border border-slate-700 bg-slate-900 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wider text-slate-300">
+                                                {testCase.priority}
+                                            </span>
 
-                                <dl className="mt-4 grid gap-3 text-sm md:grid-cols-2">
-                                    <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-3">
-                                        <dt className="text-xs uppercase tracking-wider text-slate-500">Target route</dt>
-                                        <dd className="mt-2 break-all text-slate-100">{testCase.targetRoute}</dd>
-                                    </div>
-                                    <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-3">
-                                        <dt className="text-xs uppercase tracking-wider text-slate-500">Target files</dt>
-                                        <dd className="mt-2 break-all text-slate-100">
-                                            {testCase.targetFiles.length > 0 ? testCase.targetFiles.join(', ') : 'N/A'}
-                                        </dd>
-                                    </div>
-                                </dl>
+                                            {/* Execution Live Status Pill */}
+                                            {execution?.status === 'passed' && (
+                                                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-emerald-400">
+                                                    <CheckCircle2 className="h-3.5 w-3.5" /> Passed
+                                                </span>
+                                            )}
+                                            {execution?.status === 'failed' && (
+                                                <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/40 bg-rose-500/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-rose-400">
+                                                    <XCircle className="h-3.5 w-3.5" /> Failed
+                                                </span>
+                                            )}
+                                            {isThisRunning && (
+                                                <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-amber-400">
+                                                    <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Running
+                                                </span>
+                                            )}
+                                            {!execution && !isThisRunning && (
+                                                <span className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                                                    Not Run
+                                                </span>
+                                            )}
 
-                                <div className="mt-4 rounded-lg border border-slate-800 bg-slate-900/60 p-3">
-                                    <div className="text-xs uppercase tracking-wider text-slate-500">Expected result</div>
-                                    <p className="mt-2 text-sm text-slate-200">{testCase.expectedResult}</p>
-                                </div>
-                            </article>
-                        ))}
+                                            {/* Run Test Button */}
+                                            <button
+                                                type="button"
+                                                onClick={() => void handleRunSingleTest(testCase, index)}
+                                                disabled={isThisRunning}
+                                                className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-300 shadow-sm transition hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50 ml-1"
+                                            >
+                                                {isThisRunning ? (
+                                                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                                                ) : (
+                                                    <Play className="h-3.5 w-3.5 fill-emerald-300" />
+                                                )}
+                                                Run Test
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <p className="mt-3 text-sm text-slate-300">{testCase.description}</p>
+
+                                    <dl className="mt-4 grid gap-3 text-sm md:grid-cols-2">
+                                        <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-3">
+                                            <dt className="text-xs uppercase tracking-wider text-slate-500">Target route</dt>
+                                            <dd className="mt-2 break-all text-slate-100 font-mono text-xs">{testCase.targetRoute}</dd>
+                                        </div>
+                                        <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-3">
+                                            <dt className="text-xs uppercase tracking-wider text-slate-500">Target files</dt>
+                                            <dd className="mt-2 break-all text-slate-100 font-mono text-xs">
+                                                {testCase.targetFiles.length > 0 ? testCase.targetFiles.join(', ') : 'N/A'}
+                                            </dd>
+                                        </div>
+                                    </dl>
+
+                                    <div className="mt-4 rounded-lg border border-slate-800 bg-slate-900/60 p-3">
+                                        <div className="text-xs uppercase tracking-wider text-slate-500">Expected result</div>
+                                        <p className="mt-2 text-sm text-slate-200">{testCase.expectedResult}</p>
+                                    </div>
+
+                                    {/* Action Steps */}
+                                    {testCase.actionSteps && testCase.actionSteps.length > 0 ? (
+                                        <div className="mt-4 rounded-lg border border-slate-800 bg-slate-900/40 p-3">
+                                            <div className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
+                                                Playwright Execution Steps ({testCase.actionSteps.length})
+                                            </div>
+                                            <ol className="mt-3 space-y-2 text-xs">
+                                                {testCase.actionSteps.map((step, stepIndex) => (
+                                                    <li
+                                                        key={`tc-${index}-step-${stepIndex}-${step.order ?? stepIndex + 1}`}
+                                                        className="flex items-start gap-2.5 rounded border border-slate-800/80 bg-slate-950/70 p-2 text-slate-300"
+                                                    >
+                                                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-emerald-500/10 font-mono text-[10px] font-bold text-emerald-400">
+                                                            {step.order ?? stepIndex + 1}
+                                                        </span>
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="flex flex-wrap items-center gap-1.5">
+                                                                <span className="font-mono font-semibold uppercase text-emerald-300">
+                                                                    {step.action}
+                                                                </span>
+                                                                {step.target ? (
+                                                                    <code className="rounded bg-slate-900 px-1 py-0.5 text-slate-300">
+                                                                        {step.target}
+                                                                    </code>
+                                                                ) : null}
+                                                                {step.value ? (
+                                                                    <span className="text-slate-400">
+                                                                        =&gt; <code className="text-slate-200">{step.value}</code>
+                                                                    </span>
+                                                                ) : null}
+                                                                {step.expected ? (
+                                                                    <span className="text-slate-400">
+                                                                        (expect: <code className="text-emerald-400">{step.expected}</code>)
+                                                                    </span>
+                                                                ) : null}
+                                                            </div>
+                                                            <p className="mt-1 text-slate-400">{step.description}</p>
+                                                        </div>
+                                                    </li>
+                                                ))}
+                                            </ol>
+                                        </div>
+                                    ) : null}
+
+                                    {/* Execution Details & Terminal Logs Drawer */}
+                                    {execution ? (
+                                        <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/80 overflow-hidden">
+                                            <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/80 px-4 py-3 border-b border-slate-800 text-xs">
+                                                <div className="flex items-center gap-2">
+                                                    <Terminal className="h-4 w-4 text-emerald-400" />
+                                                    <span className="font-semibold text-slate-200">Execution Output</span>
+                                                    {execution.durationMs ? (
+                                                        <span className="text-slate-500 font-mono">({execution.durationMs}ms)</span>
+                                                    ) : null}
+                                                </div>
+
+                                                <div className="flex items-center gap-2">
+                                                    {execution.sessionUrl ? (
+                                                        <a
+                                                            href={execution.sessionUrl}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="inline-flex items-center gap-1.5 rounded bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
+                                                        >
+                                                            <ExternalLink className="h-3.5 w-3.5" />
+                                                            Watch Cloud Replay
+                                                        </a>
+                                                    ) : null}
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => toggleLogs(testId)}
+                                                        className="inline-flex items-center gap-1 rounded bg-slate-800 px-2.5 py-1 text-slate-300 transition hover:bg-slate-700"
+                                                    >
+                                                        {isLogsExpanded ? (
+                                                            <>
+                                                                <ChevronUp className="h-3.5 w-3.5" />
+                                                                Hide Logs
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <ChevronDown className="h-3.5 w-3.5" />
+                                                                View Logs ({execution.logs?.length || 0})
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {execution.error && (
+                                                <div className="bg-rose-950/30 border-b border-rose-900/40 p-3 px-4 text-xs text-rose-300 flex items-start gap-2">
+                                                    <AlertCircle className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
+                                                    <div>
+                                                        <span className="font-semibold">Execution Failure: </span>
+                                                        {execution.error}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {isLogsExpanded && (
+                                                <div className="bg-black/90 p-4 font-mono text-[11px] leading-relaxed text-slate-300 max-h-64 overflow-y-auto repo-inspection-scrollbar">
+                                                    {execution.logs && execution.logs.length > 0 ? (
+                                                        execution.logs.map((logLine, lineIdx) => (
+                                                            <div
+                                                                key={lineIdx}
+                                                                className={
+                                                                    logLine.includes('❌') || logLine.includes('failed')
+                                                                        ? 'text-rose-400'
+                                                                        : logLine.includes('✅') || logLine.includes('passed') || logLine.includes('✨')
+                                                                        ? 'text-emerald-400'
+                                                                        : logLine.includes('▶️') || logLine.includes('Navigating')
+                                                                        ? 'text-cyan-300'
+                                                                        : 'text-slate-300'
+                                                                }
+                                                            >
+                                                                {logLine}
+                                                            </div>
+                                                        ))
+                                                    ) : (
+                                                        <div className="text-slate-600">No console logs available.</div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : null}
+                                </article>
+                            );
+                        })}
                     </div>
                 ) : (
                     <div className="mt-4 rounded-lg border border-dashed border-slate-700 bg-slate-950/40 p-4 text-sm text-slate-400">
@@ -633,6 +1259,7 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
                 )}
             </div>
 
+            {/* Repository Overview Card */}
             <div className="rounded-2xl border border-slate-800/80 bg-slate-900/20 p-6 shadow-xl backdrop-blur-sm">
                 <h3 className="text-lg font-semibold text-slate-100">Repository overview</h3>
                 <p className="mt-2 text-sm text-slate-400">
@@ -647,18 +1274,6 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
                     <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
                         <div className="text-xs uppercase tracking-wider text-slate-500">Language</div>
                         <div className="mt-2 text-sm font-medium text-slate-100">{repo.language ?? 'Not available'}</div>
-                    </div>
-                    <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4 md:col-span-2">
-                        <div className="text-xs uppercase tracking-wider text-slate-500">Description</div>
-                        <div className="mt-2 text-sm font-medium text-slate-100">{repo.description ?? 'No description available'}</div>
-                    </div>
-                    <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
-                        <div className="text-xs uppercase tracking-wider text-slate-500">Branches</div>
-                        <div className="mt-2 text-sm font-medium text-slate-100">{branchCount || branches.length || 1}</div>
-                    </div>
-                    <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
-                        <div className="text-xs uppercase tracking-wider text-slate-500">Tests</div>
-                        <div className="mt-2 text-sm font-medium text-slate-100">{testCount > 0 ? String(testCount) : 'Not scanned yet'}</div>
                     </div>
                 </div>
             </div>

@@ -63,7 +63,11 @@ async function fetchFileContentFromGitHub({
     branch: string;
     token: string;
 }): Promise<RepositoryFileContent> {
-    const encodedPath = encodeURIComponent(path);
+    const cleanPath = path.replace(/^\/+/, '');
+    const encodedPath = cleanPath
+        .split('/')
+        .map((segment) => encodeURIComponent(segment))
+        .join('/');
     const url = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodedPath}?ref=${encodeURIComponent(branch)}`;
 
     const response = await fetch(url, {

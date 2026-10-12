@@ -17,10 +17,10 @@ export async function GET(req: NextRequest) {
     try {
         const { owner: trimmedOwner, repo: trimmedRepo, branch: trimmedBranch } = readGitHubQuery(req, { branch: true });
         const applicationUserId = Number(await requireConnectedRepositoryAccess(trimmedOwner, trimmedRepo));
-        enforceRateLimit(`github:test-cases:${applicationUserId}`, 5);
+        enforceRateLimit(`github:test-cases:${applicationUserId}`, 10);
 
         // ------------------------------------------------------------
-        // 3. Find the connected repository owned by this user
+        // 1. Find the connected repository owned by this user
         // ------------------------------------------------------------
         const [repository] = await db
             .select()
@@ -37,15 +37,14 @@ export async function GET(req: NextRequest) {
         if (!repository) {
             return NextResponse.json(
                 {
-                    error:
-                        "Repository is not connected to this TestPilot account",
+                    error: "Repository is not connected to this TestPilot account",
                 },
                 { status: 404 }
             );
         }
 
         // ------------------------------------------------------------
-        // 4. Build repository context
+        // 2. Build repository context & AST analysis
         // ------------------------------------------------------------
         const context = await assembleRepositoryContext({
             owner: trimmedOwner,
@@ -53,13 +52,10 @@ export async function GET(req: NextRequest) {
             branch: trimmedBranch,
         });
 
-        // ------------------------------------------------------------
-        // 5. Analyze repository
-        // ------------------------------------------------------------
         const analysis = analyzeRepositoryContext(context);
 
         // ------------------------------------------------------------
-        // 6. Generate evidence-grounded test cases
+        // 3. Generate evidence-grounded, categorized, Playwright-ready test cases
         // ------------------------------------------------------------
         const generated = await generateTestCases(context, analysis);
 
@@ -76,11 +72,7 @@ export async function GET(req: NextRequest) {
         }
 
         // ------------------------------------------------------------
-        // 7. Persist generated test cases
-        //
-        // Avoid inserting the same generated test repeatedly.
-        // A test is considered a duplicate when the repository,
-        // title, and target route are the same.
+        // 4. Persist generated test cases with actionSteps
         // ------------------------------------------------------------
         const persistedTestCases = [];
 
@@ -101,7 +93,17 @@ export async function GET(req: NextRequest) {
                 .limit(1);
 
             if (existing.length > 0) {
-                persistedTestCases.push(existing[0]);
+                const existingItem = existing[0];
+                if (!existingItem.actionSteps && generatedTest.actionSteps) {
+                    const [updated] = await db
+                        .update(testCases)
+                        .set({ actionSteps: generatedTest.actionSteps })
+                        .where(eq(testCases.id, existingItem.id))
+                        .returning();
+                    persistedTestCases.push(updated);
+                } else {
+                    persistedTestCases.push(existingItem);
+                }
                 continue;
             }
 
@@ -116,6 +118,7 @@ export async function GET(req: NextRequest) {
                     targetRoute: generatedTest.targetRoute,
                     targetFiles: generatedTest.targetFiles,
                     expectedResult: generatedTest.expectedResult,
+                    actionSteps: generatedTest.actionSteps,
                 })
                 .returning();
 
@@ -123,10 +126,9 @@ export async function GET(req: NextRequest) {
         }
 
         // ------------------------------------------------------------
-        // 8. Return generated + persisted test cases
+        // 5. Return generated + persisted test cases
         // ------------------------------------------------------------
         return NextResponse.json({
-            ...generated,
             repositoryId: repository.id,
             testCases: persistedTestCases,
         });
@@ -147,7 +149,7 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: "Repository not found" }, { status: 404 });
         }
 
-        console.error("[TEST CASE GENERATION] request failed");
+        console.error("[TEST CASE GENERATION] request failed:", error);
 
         return NextResponse.json(
             { error: "Unable to generate test cases" },

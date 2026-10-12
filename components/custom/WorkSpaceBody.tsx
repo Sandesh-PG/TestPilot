@@ -19,6 +19,7 @@ import {
 
 type GitHubRepository = {
     id: number;
+    databaseId?: number;
     name: string;
     full_name: string;
     owner: {
@@ -29,11 +30,13 @@ type GitHubRepository = {
     private: boolean;
     description: string | null;
     language: string | null;
+    targetEnvironmentUrl?: string | null;
     updated_at: string;
 };
 
 type PersistedRepository = {
     id: number;
+    databaseId?: number;
     name: string;
     full_name: string;
     owner: {
@@ -44,6 +47,7 @@ type PersistedRepository = {
     private: boolean;
     description: string | null;
     language: string | null;
+    targetEnvironmentUrl?: string | null;
     updated_at: string;
     connected_at?: string | null;
     last_sync?: string | null;
@@ -155,6 +159,7 @@ const mapPersistedRepository = (repository: Partial<PersistedRepository> | Recor
 
     return {
         id,
+        databaseId: typeof record.databaseId === 'number' ? record.databaseId : (typeof record.id === 'number' ? record.id : undefined),
         name,
         full_name: fullName,
         owner: {
@@ -165,6 +170,7 @@ const mapPersistedRepository = (repository: Partial<PersistedRepository> | Recor
         private: isPrivate,
         description: typeof record.description === 'string' ? record.description : null,
         language: typeof record.language === 'string' ? record.language : null,
+        targetEnvironmentUrl: typeof record.targetEnvironmentUrl === 'string' ? record.targetEnvironmentUrl : 'http://localhost:3000',
         updated_at: updatedAt,
     };
 };
