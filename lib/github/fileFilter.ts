@@ -93,6 +93,11 @@ const SOURCE_EXTENSIONS = new Set([
     '.hpp',
     '.vue',
     '.svelte',
+    '.ejs',
+    '.html',
+    '.htm',
+    '.hbs',
+    '.pug',
     '.kt',
     '.swift',
     '.scala',
@@ -109,6 +114,25 @@ const SOURCE_EXTENSIONS = new Set([
     '.json',
     '.xml',
     '.properties',
+]);
+
+const UI_TEMPLATE_EXTENSIONS = new Set([
+    '.ejs',
+    '.html',
+    '.htm',
+    '.jsx',
+    '.tsx',
+    '.vue',
+    '.svelte',
+    '.hbs',
+    '.pug',
+]);
+
+const PRIORITY_DIRECTORIES = new Set([
+    'views',
+    'templates',
+    'components',
+    'pages',
 ]);
 
 const KEEP_FILE_NAMES = new Set([
@@ -217,7 +241,8 @@ function shouldExcludePath(path: string): boolean {
 
 function isInterestingFile(path: string): boolean {
     const normalized = normalizePath(path);
-    const fileName = normalized.split('/').pop() ?? '';
+    const segments = normalized.toLowerCase().split('/');
+    const fileName = segments[segments.length - 1] ?? '';
 
     if (KEEP_FILE_NAMES.has(fileName)) {
         return true;
@@ -233,6 +258,18 @@ function isInterestingFile(path: string): boolean {
     }
 
     const extension = getFileExtension(normalized);
+
+    // Prioritize and preserve UI template and view files
+    if (segments.some((segment) => PRIORITY_DIRECTORIES.has(segment))) {
+        if (SOURCE_EXTENSIONS.has(extension) || UI_TEMPLATE_EXTENSIONS.has(extension) || extension === '.json') {
+            return true;
+        }
+    }
+
+    if (UI_TEMPLATE_EXTENSIONS.has(extension)) {
+        return true;
+    }
+
     if (SOURCE_EXTENSIONS.has(extension)) {
         return true;
     }
@@ -250,6 +287,39 @@ function isInterestingFile(path: string): boolean {
     }
 
     return false;
+}
+
+function getIngestionPriority(path: string): number {
+    const normalized = normalizePath(path).toLowerCase();
+    const segments = normalized.split('/');
+    const fileName = segments[segments.length - 1] ?? '';
+    const extension = getFileExtension(normalized);
+
+    // Root manifests and documentation
+    if (fileName === 'package.json' || fileName === 'readme.md') return 100;
+    if (fileName.includes('config') || fileName === 'tsconfig.json') return 90;
+
+    // Server entrypoints & routers
+    if (/^(app|server|index)\.(js|ts|mjs|cjs)$/.test(fileName) || normalized.includes('/routes/') || normalized.includes('api/')) {
+        return 85;
+    }
+
+    // Prioritize views/, templates/, components/, and pages/ folders
+    if (segments.some((seg) => PRIORITY_DIRECTORIES.has(seg))) {
+        return 80;
+    }
+
+    // UI and template extensions anywhere
+    if (UI_TEMPLATE_EXTENSIONS.has(extension)) {
+        return 75;
+    }
+
+    // Standard source files
+    if (SOURCE_EXTENSIONS.has(extension)) {
+        return 50;
+    }
+
+    return 20;
 }
 
 export function filterRepositoryFiles(tree: RepositoryTreeItem[]): RepositoryTreeItem[] {
@@ -274,5 +344,8 @@ export function filterRepositoryFiles(tree: RepositoryTreeItem[]): RepositoryTre
         }
     }
 
-    return Array.from(accepted.values());
+    // Sort so prioritized folders (views, templates, components, pages) and entrypoints are ingested first
+    return Array.from(accepted.values()).sort(
+        (a, b) => getIngestionPriority(b.path) - getIngestionPriority(a.path)
+    );
 }

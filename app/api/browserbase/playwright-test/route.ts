@@ -160,7 +160,7 @@ export async function POST(req: NextRequest) {
                     })
                     .returning();
 
-                const result = await executeTestCase(targetUrl, testCase);
+                const result = await executeTestCase(targetUrl, testCase, { executionId: executionRecord.id });
 
                 const [updatedRecord] = await db
                     .update(testExecutions)
@@ -235,7 +235,7 @@ export async function POST(req: NextRequest) {
 
         try {
             // Execute using Playwright over Browserbase
-            const executionResult = await executeTestCase(targetUrl, testCase);
+            const executionResult = await executeTestCase(targetUrl, testCase, { executionId: executionRecord.id });
 
             const [updatedExecution] = await db
                 .update(testExecutions)

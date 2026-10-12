@@ -632,6 +632,12 @@ CRITICAL TARGET ROUTE RULES (MUST STRICTLY FOLLOW):
 4. targetFiles:
    - Must be real source files from the provided repository evidence that actually correspond to that targetRoute.
 
+CRITICAL DOM SELECTOR RULES (DO NOT HALLUCINATE):
+- NEVER hallucinate arbitrary IDs or class selectors like '#tasks', '#todo-list', or '#content' unless they appear in DETECTED DOM ELEMENTS below!
+- For 'click', 'fill', 'submit', 'assertVisible', and 'assertText' steps:
+  - STRICTLY PREFER the genuine selectors listed in detectedSurfaces.domElements (e.g. '.box', '.item', 'input[name="newItem"]', 'form[action="/"]', 'button[type="submit"]').
+  - If asserting page visibility and no specific ID is known, assert standard rendered elements like 'body', 'form', 'main', 'h1', 'ul', 'input', 'button', or visible text 'text=...'.
+
 DYNAMIC TEST SUITE SCALING:
 - Generate EXACTLY ${targetTestCount} distinct, high-value test cases.
 - Provide comprehensive coverage distributed across these mandatory categories:
@@ -687,6 +693,14 @@ Return a valid JSON object adhering to this exact format:
             detectedSurfaces: {
                 apiEndpoints: apiSurfaceDescriptions,
                 uiRoutes: uiRouteDescriptions,
+                domElements: (analysis.domElements ?? []).map((el) => ({
+                    selector: el.selector,
+                    tag: el.tag,
+                    id: el.id,
+                    name: el.name,
+                    action: el.action,
+                    sourceFile: el.sourceFile,
+                })),
                 authentication: {
                     detected: analysis.authentication.detected,
                     evidence: analysis.authentication.evidence,

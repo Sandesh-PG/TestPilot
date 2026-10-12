@@ -26,6 +26,18 @@ export type TestableSurface = {
     evidence: string[];
 };
 
+export type DiscoveredDomElement = {
+    selector: string;
+    tag: string;
+    id?: string;
+    classes?: string[];
+    name?: string;
+    type?: string;
+    action?: string;
+    sourceFile: string;
+    description?: string;
+};
+
 export type RepositoryAnalysis = {
     framework?: string;
     language?: string;
@@ -45,6 +57,8 @@ export type RepositoryAnalysis = {
     interactions: InteractionSurface[];
 
     importantFiles: string[];
+
+    domElements: DiscoveredDomElement[];
 
     capabilities: {
         hasApi: boolean;
@@ -464,6 +478,202 @@ function detectDatabaseEvidence(context: RepositoryContext): boolean {
     return lowered.some((path) => path.includes('db/') || path.includes('schema'));
 }
 
+function getFileExtension(path: string): string {
+    const fileName = path.split('/').pop() ?? '';
+    const lastDot = fileName.lastIndexOf('.');
+    if (lastDot <= 0 || lastDot === fileName.length - 1) return '';
+    return fileName.slice(lastDot).toLowerCase();
+}
+
+const TEMPLATE_EXTENSIONS = new Set([
+    '.ejs',
+    '.html',
+    '.htm',
+    '.jsx',
+    '.tsx',
+    '.vue',
+    '.svelte',
+    '.hbs',
+    '.pug',
+]);
+
+function extractDomElementsFromTemplates(context: RepositoryContext): DiscoveredDomElement[] {
+    const discovered: DiscoveredDomElement[] = [];
+    const seen = new Set<string>();
+
+    const addElement = (el: DiscoveredDomElement) => {
+        const key = `${el.selector}|${el.sourceFile}`;
+        if (!el.selector || seen.has(key)) return;
+        seen.add(key);
+        discovered.push(el);
+    };
+
+    for (const file of context.files) {
+        const ext = getFileExtension(file.path);
+        const lower = lowerPath(file.path);
+        const isTemplate =
+            TEMPLATE_EXTENSIONS.has(ext) ||
+            lower.includes('/views/') ||
+            lower.includes('/templates/') ||
+            lower.includes('/components/') ||
+            lower.includes('/pages/');
+
+        if (!isTemplate) continue;
+
+        const content = file.content;
+
+        // 1. Form elements and actions
+        const formRegex = /<form\b([^>]*)>/gi;
+        for (const match of content.matchAll(formRegex)) {
+            const attrs = match[1];
+            const actionMatch = attrs.match(/\baction=["']([^"']*)["']/i);
+            const methodMatch = attrs.match(/\bmethod=["']([^"']*)["']/i);
+            const idMatch = attrs.match(/\bid=["']([^"']*)["']/i);
+            const classMatch = attrs.match(/\b(?:class|className)=["']([^"']*)["']/i);
+
+            const action = actionMatch ? actionMatch[1] : undefined;
+            const id = idMatch ? idMatch[1] : undefined;
+            const classStr = classMatch ? classMatch[1] : undefined;
+            const classes = classStr ? classStr.trim().split(/\s+/).filter(Boolean) : undefined;
+
+            let selector = 'form';
+            if (id) {
+                selector = `#${id}`;
+            } else if (action) {
+                selector = `form[action="${action}"]`;
+            } else if (classes && classes.length > 0) {
+                selector = `form.${classes[0]}`;
+            }
+
+            addElement({
+                selector,
+                tag: 'form',
+                id,
+                classes,
+                action,
+                type: methodMatch ? methodMatch[1].toUpperCase() : 'POST',
+                sourceFile: file.path,
+                description: action ? `Form submitting to ${action}` : 'Form container',
+            });
+        }
+
+        // 2. Input elements (name, type, id, class)
+        const inputRegex = /<input\b([^>]*)>/gi;
+        for (const match of content.matchAll(inputRegex)) {
+            const attrs = match[1];
+            const nameMatch = attrs.match(/\bname=["']([^"']*)["']/i);
+            const typeMatch = attrs.match(/\btype=["']([^"']*)["']/i);
+            const idMatch = attrs.match(/\bid=["']([^"']*)["']/i);
+            const classMatch = attrs.match(/\b(?:class|className)=["']([^"']*)["']/i);
+
+            const name = nameMatch ? nameMatch[1] : undefined;
+            const type = typeMatch ? typeMatch[1] : 'text';
+            const id = idMatch ? idMatch[1] : undefined;
+            const classStr = classMatch ? classMatch[1] : undefined;
+            const classes = classStr ? classStr.trim().split(/\s+/).filter(Boolean) : undefined;
+
+            let selector = 'input';
+            if (id) {
+                selector = `#${id}`;
+            } else if (name) {
+                selector = `input[name="${name}"]`;
+            } else if (classes && classes.length > 0) {
+                selector = `input.${classes[0]}`;
+            } else if (type) {
+                selector = `input[type="${type}"]`;
+            }
+
+            addElement({
+                selector,
+                tag: 'input',
+                name,
+                type,
+                id,
+                classes,
+                sourceFile: file.path,
+                description: name ? `Input field [name="${name}"]` : `Input [type="${type}"]`,
+            });
+        }
+
+        // 3. Button elements
+        const buttonRegex = /<button\b([^>]*)>(?:([\s\S]*?)<\/button>)?/gi;
+        for (const match of content.matchAll(buttonRegex)) {
+            const attrs = match[1];
+            const textContent = match[2]?.trim().replace(/\s+/g, ' ');
+            const typeMatch = attrs.match(/\btype=["']([^"']*)["']/i);
+            const nameMatch = attrs.match(/\bname=["']([^"']*)["']/i);
+            const idMatch = attrs.match(/\bid=["']([^"']*)["']/i);
+            const classMatch = attrs.match(/\b(?:class|className)=["']([^"']*)["']/i);
+
+            const type = typeMatch ? typeMatch[1] : 'submit';
+            const name = nameMatch ? nameMatch[1] : undefined;
+            const id = idMatch ? idMatch[1] : undefined;
+            const classStr = classMatch ? classMatch[1] : undefined;
+            const classes = classStr ? classStr.trim().split(/\s+/).filter(Boolean) : undefined;
+
+            let selector = 'button';
+            if (id) {
+                selector = `#${id}`;
+            } else if (name) {
+                selector = `button[name="${name}"]`;
+            } else if (type === 'submit') {
+                selector = 'button[type="submit"]';
+            } else if (classes && classes.length > 0) {
+                selector = `button.${classes[0]}`;
+            }
+
+            addElement({
+                selector,
+                tag: 'button',
+                name,
+                type,
+                id,
+                classes,
+                sourceFile: file.path,
+                description: textContent ? `Button "${textContent.slice(0, 30)}"` : 'Button element',
+            });
+        }
+
+        // 4. Containers and semantic elements with IDs or notable classes
+        const containerRegex = /<(div|main|section|ul|ol|li|h1|h2|h3|p)\b([^>]*)>/gi;
+        for (const match of content.matchAll(containerRegex)) {
+            const tag = match[1].toLowerCase();
+            const attrs = match[2];
+            const idMatch = attrs.match(/\bid=["']([^"']*)["']/i);
+            const classMatch = attrs.match(/\b(?:class|className)=["']([^"']*)["']/i);
+
+            if (idMatch) {
+                const id = idMatch[1];
+                addElement({
+                    selector: `#${id}`,
+                    tag,
+                    id,
+                    sourceFile: file.path,
+                    description: `${tag} container #${id}`,
+                });
+            }
+
+            if (classMatch) {
+                const classStr = classMatch[1];
+                const classes = classStr.trim().split(/\s+/).filter(Boolean);
+                for (const cls of classes.slice(0, 3)) {
+                    if (cls.length >= 2 && !cls.includes('{') && !cls.includes('%')) {
+                        addElement({
+                            selector: `.${cls}`,
+                            tag,
+                            classes: [cls],
+                            sourceFile: file.path,
+                            description: `${tag} element with class .${cls}`,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    return discovered.slice(0, 60);
+}
+
 function detectImportantFiles(context: RepositoryContext): string[] {
     const important = new Set<string>();
     const allFiles = context.files.map((file) => file.path);
@@ -476,6 +686,16 @@ function detectImportantFiles(context: RepositoryContext): string[] {
             lp.endsWith('/page.ts') ||
             lp.endsWith('/page.jsx') ||
             lp.endsWith('/page.js') ||
+            lp.endsWith('.ejs') ||
+            lp.endsWith('.html') ||
+            lp.endsWith('.htm') ||
+            lp.endsWith('.vue') ||
+            lp.endsWith('.svelte') ||
+            lp.endsWith('.hbs') ||
+            lp.endsWith('.pug') ||
+            lp.includes('/views/') ||
+            lp.includes('/templates/') ||
+            lp.includes('/components/') ||
             lp.includes('sign-in') ||
             lp.includes('sign-up') ||
             lp.includes('auth') ||
@@ -594,6 +814,17 @@ function validateRepositoryAnalysis(context: RepositoryContext, analysis: Reposi
             throw new Error(`Important file not found in repository context: ${file}`);
         }
     }
+
+    if (analysis.domElements) {
+        if (!Array.isArray(analysis.domElements)) {
+            throw new Error('domElements must be an array');
+        }
+        for (const el of analysis.domElements) {
+            if (el.sourceFile && !allowedFileSet.has(el.sourceFile)) {
+                throw new Error(`DOM element source file not found in repository context: ${el.sourceFile}`);
+            }
+        }
+    }
 }
 
 export function analyzeRepositoryContext(context: RepositoryContext): RepositoryAnalysis {
@@ -609,6 +840,9 @@ export function analyzeRepositoryContext(context: RepositoryContext): Repository
         })()
         : context.project.packageManager;
 
+    const testableSurfaces = detectGenericTestableSurfaces(context);
+    const domElements = extractDomElementsFromTemplates(context);
+
     const routes: RouteSurface[] = [];
     const routeFiles = new Map<string, Set<string>>();
 
@@ -621,6 +855,27 @@ export function analyzeRepositoryContext(context: RepositoryContext): Repository
         const entry = routeFiles.get(path) ?? new Set<string>();
         entry.add(file.path);
         routeFiles.set(path, entry);
+    }
+
+    // Incorporate surfaces detected from HTTP handlers or page declarations
+    for (const surface of testableSurfaces) {
+        if (!routeFiles.has(surface.path)) {
+            const isApi = surface.path.startsWith('/api') || (surface.type === 'api' && !surface.methods.includes('GET'));
+            const type = isApi ? 'api' : 'page';
+            const entry = routeFiles.get(surface.path) ?? new Set<string>();
+            for (const f of surface.sourceFiles) {
+                entry.add(f);
+            }
+            routeFiles.set(surface.path, entry);
+        }
+    }
+
+    // Fallback default home route if no routes detected
+    if (routeFiles.size === 0) {
+        const fallbackFile = context.files.find((f) => /^(app|server|index)\.(js|ts|mjs|cjs)$/i.test(normalizePath(f.path)))?.path ?? context.files[0]?.path;
+        if (fallbackFile) {
+            routeFiles.set('/', new Set([fallbackFile]));
+        }
     }
 
     for (const [path, sourceFiles] of routeFiles.entries()) {
@@ -656,6 +911,20 @@ export function analyzeRepositoryContext(context: RepositoryContext): Repository
         apiFiles.set(route, entry);
     }
 
+    // Add generic API surfaces (Express, Flask, FastAPI endpoints)
+    for (const surface of testableSurfaces) {
+        if (surface.type === 'api' || surface.path.startsWith('/api') || surface.methods.some((m) => m !== 'GET')) {
+            const entry = apiFiles.get(surface.path) ?? { methods: new Set<string>(), files: new Set<string>() };
+            for (const method of surface.methods) {
+                entry.methods.add(method);
+            }
+            for (const f of surface.sourceFiles) {
+                entry.files.add(f);
+            }
+            apiFiles.set(surface.path, entry);
+        }
+    }
+
     for (const [route, entry] of apiFiles.entries()) {
         apiEndpoints.push({
             route,
@@ -668,7 +937,6 @@ export function analyzeRepositoryContext(context: RepositoryContext): Repository
     const authDetected = authEvidence.length > 0;
     const interactions = findInteractionEvidence(context);
     const importantFiles = detectImportantFiles(context);
-    const testableSurfaces = detectGenericTestableSurfaces(context);
 
     const analysis: RepositoryAnalysis = {
         framework: context.project.type || undefined,
@@ -683,6 +951,7 @@ export function analyzeRepositoryContext(context: RepositoryContext): Repository
         },
         interactions,
         importantFiles,
+        domElements,
         capabilities: {
             hasApi:
                 apiEndpoints.length > 0 ||
