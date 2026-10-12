@@ -41,9 +41,12 @@ type RepoDetailsProps = {
         updated_at: string;
         branchCount?: number;
         testCount?: number;
+        projectId?: string;
         testCases?: GeneratedTestCase[];
     };
-    onDisconnect: () => void;
+    initialTestCases?: GeneratedTestCase[];
+    initialExecutions?: Record<number, TestCaseExecution>;
+    onDisconnect?: () => void;
 };
 
 type GitHubBranch = {
@@ -93,9 +96,14 @@ function formatReason(reason: string | undefined): string {
     }
 }
 
-export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetailsProps>) {
+export default function RepoDetails({
+    repo,
+    initialTestCases,
+    initialExecutions,
+    onDisconnect,
+}: Readonly<RepoDetailsProps>) {
     const branchCount = repo.branchCount ?? 0;
-    const testCount = repo.testCount ?? 0;
+    const testCount = repo.testCount ?? (initialTestCases?.length ?? (repo.testCases?.length ?? 0));
     const [branches, setBranches] = useState<GitHubBranch[]>([]);
     const [selectedBranch, setSelectedBranch] = useState<string>(repo.default_branch || 'main');
     const [isLoadingBranches, setIsLoadingBranches] = useState(true);
@@ -109,7 +117,9 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
     const [filePreviewError, setFilePreviewError] = useState<string | null>(null);
     const [isGeneratingTests, setIsGeneratingTests] = useState(false);
     const [generationError, setGenerationError] = useState<string | null>(null);
-    const [generatedTestCases, setGeneratedTestCases] = useState<GeneratedTestCase[]>([]);
+    const [generatedTestCases, setGeneratedTestCases] = useState<GeneratedTestCase[]>(
+        initialTestCases && initialTestCases.length > 0 ? initialTestCases : (repo.testCases || [])
+    );
     const fileRequestIdRef = useRef(0);
 
     // Environment URL & Execution State
@@ -118,10 +128,24 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
     const [envUrlSavedMessage, setEnvUrlSavedMessage] = useState<string | null>(null);
     const [envUrlError, setEnvUrlError] = useState<string | null>(null);
 
-    const [executions, setExecutions] = useState<Record<number, TestCaseExecution>>({});
+    const [executions, setExecutions] = useState<Record<number, TestCaseExecution>>(initialExecutions || {});
     const [runningTestIds, setRunningTestIds] = useState<Set<number>>(new Set());
     const [isRunningAll, setIsRunningAll] = useState(false);
     const [expandedLogIds, setExpandedLogIds] = useState<Set<number>>(new Set());
+
+    // Sync initialTestCases if updated from parent
+    useEffect(() => {
+        if (initialTestCases && initialTestCases.length > 0) {
+            setGeneratedTestCases(initialTestCases);
+        }
+    }, [initialTestCases]);
+
+    // Sync initialExecutions if updated from parent
+    useEffect(() => {
+        if (initialExecutions && Object.keys(initialExecutions).length > 0) {
+            setExecutions((prev) => ({ ...prev, ...initialExecutions }));
+        }
+    }, [initialExecutions]);
 
     // Update targetEnvUrl if repo prop changes
     useEffect(() => {
@@ -460,13 +484,16 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
         setEnvUrlError(null);
         setEnvUrlSavedMessage(null);
 
-        const repoIdentifier = repo.databaseId || repo.id;
+        const repoIdentifier = repo.projectId || repo.databaseId || repo.id;
 
         try {
             const response = await fetch(`/api/repositories/${repoIdentifier}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ targetEnvironmentUrl: urlToSave }),
+                body: JSON.stringify({
+                    targetEnvironmentUrl: urlToSave,
+                    projectId: repo.projectId,
+                }),
             });
 
             if (!response.ok) {
@@ -498,6 +525,10 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
                 repo: repo.name,
                 branch: selectedBranch,
             });
+
+            if (repo.projectId) {
+                params.set('projectId', repo.projectId);
+            }
 
             const response = await fetch(`/api/github/test-cases?${params.toString()}`, {
                 method: 'GET',
@@ -547,6 +578,7 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
                 body: JSON.stringify({
                     testCaseId: testCase.id,
                     repositoryId: repo.databaseId || repo.id,
+                    projectId: repo.projectId,
                     appUrl: targetEnvUrl,
                 }),
             });
@@ -672,14 +704,16 @@ export default function RepoDetails({ repo, onDisconnect }: Readonly<RepoDetails
                             <RefreshCw className="h-4 w-4" />
                             Sync unavailable
                         </button>
-                        <button
-                            type="button"
-                            onClick={onDisconnect}
-                            className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-slate-600 hover:bg-slate-800"
-                        >
-                            <Trash2 className="h-4 w-4" />
-                            Disconnect
-                        </button>
+                        {onDisconnect ? (
+                            <button
+                                type="button"
+                                onClick={onDisconnect}
+                                className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-slate-600 hover:bg-slate-800"
+                            >
+                                <Trash2 className="h-4 w-4" />
+                                Disconnect
+                            </button>
+                        ) : null}
                     </div>
                 </div>
 

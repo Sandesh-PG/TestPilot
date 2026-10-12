@@ -16,6 +16,7 @@ import {
 export async function GET(req: NextRequest) {
     try {
         const { owner: trimmedOwner, repo: trimmedRepo, branch: trimmedBranch } = readGitHubQuery(req, { branch: true });
+        const projectIdParam = req.nextUrl.searchParams.get("projectId")?.trim();
         const applicationUserId = Number(await requireConnectedRepositoryAccess(trimmedOwner, trimmedRepo));
         enforceRateLimit(`github:test-cases:${applicationUserId}`, 10);
 
@@ -74,6 +75,7 @@ export async function GET(req: NextRequest) {
         // ------------------------------------------------------------
         // 4. Persist generated test cases with actionSteps
         // ------------------------------------------------------------
+        const targetProjectId = projectIdParam || String(repository.id);
         const persistedTestCases = [];
 
         for (const generatedTest of generated.testCases) {
@@ -94,10 +96,18 @@ export async function GET(req: NextRequest) {
 
             if (existing.length > 0) {
                 const existingItem = existing[0];
+                const updatePayload: { actionSteps?: typeof generatedTest.actionSteps; projectId?: string } = {};
                 if (!existingItem.actionSteps && generatedTest.actionSteps) {
+                    updatePayload.actionSteps = generatedTest.actionSteps;
+                }
+                if (!existingItem.projectId && targetProjectId) {
+                    updatePayload.projectId = targetProjectId;
+                }
+
+                if (Object.keys(updatePayload).length > 0) {
                     const [updated] = await db
                         .update(testCases)
-                        .set({ actionSteps: generatedTest.actionSteps })
+                        .set(updatePayload)
                         .where(eq(testCases.id, existingItem.id))
                         .returning();
                     persistedTestCases.push(updated);
@@ -111,7 +121,7 @@ export async function GET(req: NextRequest) {
                 .insert(testCases)
                 .values({
                     repositoryId: repository.id,
-                    projectId: String(repository.id),
+                    projectId: targetProjectId,
                     title: generatedTest.title,
                     description: generatedTest.description,
                     type: generatedTest.type,

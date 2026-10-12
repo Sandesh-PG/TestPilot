@@ -132,15 +132,28 @@ export async function GET(
             .from(testCases)
             .where(or(...conditions));
 
+        const ownerLogin = typeof repo.owner === 'object' && repo.owner !== null ? (repo.owner as { login?: string }).login : repo.owner;
+        const repoFullName = repo.fullName || repo.name;
+        const repoUrl = repo.url || `https://github.com/${repoFullName}`;
+
         return NextResponse.json({
             repository: {
-                id: repo.githubRepoId,
+                id: repo.githubRepoId || repo.id,
                 databaseId: repo.id,
                 name: repo.name,
-                fullName: repo.fullName,
-                owner: repo.owner,
+                full_name: repoFullName,
+                owner: {
+                    login: ownerLogin || 'owner',
+                },
+                html_url: repoUrl,
+                url: repoUrl,
+                default_branch: repo.defaultBranch || 'main',
+                private: repo.isPrivate ?? false,
+                description: repo.description ?? null,
+                language: repo.language ?? null,
                 targetEnvironmentUrl: repo.targetEnvironmentUrl ?? "http://localhost:3000",
-                defaultBranch: repo.defaultBranch,
+                connectedAt: repo.connectedAt ? new Date(repo.connectedAt).toISOString() : new Date().toISOString(),
+                updated_at: repo.connectedAt ? new Date(repo.connectedAt).toISOString() : new Date().toISOString(),
             },
             testCases: repoTests,
         });

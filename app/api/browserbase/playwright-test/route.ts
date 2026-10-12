@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { auth, currentUser } from "@clerk/nextjs/server";
 
-import { db, repositories, testCases, testExecutions, users } from "@/db";
+import { db, projects, repositories, testCases, testExecutions, users } from "@/db";
 import { executeTestCase } from "@/lib/test-execution/testExecutor";
 
 async function getApplicationUser() {
@@ -28,8 +28,8 @@ async function getApplicationUser() {
 }
 
 /**
- * GET /api/browserbase/playwright-test?repositoryId=123 or ?testCaseId=456
- * Returns recent test execution history for the repository or test case.
+ * GET /api/browserbase/playwright-test?repositoryId=123, ?projectId=456, or ?testCaseId=789
+ * Returns recent test execution history for the repository, project, or test case.
  */
 export async function GET(req: NextRequest) {
     try {
@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
         const { searchParams } = new URL(req.url);
         const testCaseIdParam = searchParams.get("testCaseId");
         const repoIdParam = searchParams.get("repositoryId");
+        const projectIdParam = searchParams.get("projectId");
 
         if (testCaseIdParam) {
             const testCaseId = Number(testCaseIdParam);
@@ -50,6 +51,27 @@ export async function GET(req: NextRequest) {
                 .where(eq(testExecutions.testCaseId, testCaseId))
                 .orderBy(desc(testExecutions.createdAt))
                 .limit(10);
+
+            return NextResponse.json({ executions });
+        }
+
+        if (projectIdParam) {
+            const projectTests = await db
+                .select({ id: testCases.id })
+                .from(testCases)
+                .where(eq(testCases.projectId, projectIdParam));
+
+            if (projectTests.length === 0) {
+                return NextResponse.json({ executions: [] });
+            }
+
+            const testIds = projectTests.map((t) => t.id);
+            const executions = await db
+                .select()
+                .from(testExecutions)
+                .where(inArray(testExecutions.testCaseId, testIds))
+                .orderBy(desc(testExecutions.createdAt))
+                .limit(50);
 
             return NextResponse.json({ executions });
         }
@@ -78,7 +100,7 @@ export async function GET(req: NextRequest) {
         }
 
         return NextResponse.json(
-            { error: "Provide testCaseId or repositoryId query parameter" },
+            { error: "Provide testCaseId, projectId, or repositoryId query parameter" },
             { status: 400 }
         );
     } catch (error) {
@@ -89,60 +111,81 @@ export async function GET(req: NextRequest) {
 
 /**
  * POST /api/browserbase/playwright-test
- * Body: { testCaseId?: number, repositoryId?: number, runAll?: boolean, appUrl?: string }
+ * Body: { testCaseId?: number, repositoryId?: number, projectId?: string, runAll?: boolean, appUrl?: string }
  */
 export async function POST(req: NextRequest) {
     try {
         const appUser = await getApplicationUser();
-        if (!appUser) {
+        const { userId: clerkUserId } = await auth();
+
+        if (!appUser && !clerkUserId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
         const body = (await req.json().catch(() => ({}))) as {
             testCaseId?: number;
             repositoryId?: number;
+            projectId?: string;
             runAll?: boolean;
             appUrl?: string;
         };
 
-        const { testCaseId, repositoryId, runAll, appUrl: customAppUrl } = body;
+        const { testCaseId, repositoryId, projectId, runAll, appUrl: customAppUrl } = body;
 
         // -------------------------------------------------------------------
-        // Scenario A: Run All Tests for a Repository
+        // Scenario A: Run All Tests for a Project or Repository
         // -------------------------------------------------------------------
         if (runAll) {
-            if (!repositoryId) {
+            let targetUrl = customAppUrl?.trim() || "http://localhost:3000";
+            let allCases: (typeof testCases.$inferSelect)[] = [];
+
+            if (projectId) {
+                const [projectRecord] = await db
+                    .select()
+                    .from(projects)
+                    .where(eq(projects.id, projectId))
+                    .limit(1);
+
+                if (projectRecord?.environmentUrl) {
+                    targetUrl = customAppUrl?.trim() || projectRecord.environmentUrl;
+                }
+
+                allCases = await db
+                    .select()
+                    .from(testCases)
+                    .where(eq(testCases.projectId, projectId));
+            } else if (repositoryId && appUser) {
+                const [repo] = await db
+                    .select()
+                    .from(repositories)
+                    .where(
+                        and(
+                            eq(repositories.userId, appUser.id),
+                            or(eq(repositories.id, repositoryId), eq(repositories.githubRepoId, repositoryId))
+                        )
+                    )
+                    .limit(1);
+
+                if (!repo) {
+                    return NextResponse.json({ error: "Repository not found" }, { status: 404 });
+                }
+
+                targetUrl = customAppUrl?.trim() || repo.targetEnvironmentUrl || "http://localhost:3000";
+
+                allCases = await db
+                    .select()
+                    .from(testCases)
+                    .where(eq(testCases.repositoryId, repo.id));
+            } else {
                 return NextResponse.json(
-                    { error: "repositoryId is required when runAll is true" },
+                    { error: "repositoryId or projectId is required when runAll is true" },
                     { status: 400 }
                 );
             }
 
-            const [repo] = await db
-                .select()
-                .from(repositories)
-                .where(
-                    and(
-                        eq(repositories.userId, appUser.id),
-                        or(eq(repositories.id, repositoryId), eq(repositories.githubRepoId, repositoryId))
-                    )
-                )
-                .limit(1);
-
-            if (!repo) {
-                return NextResponse.json({ error: "Repository not found" }, { status: 404 });
-            }
-
-            const targetUrl = customAppUrl?.trim() || repo.targetEnvironmentUrl || "http://localhost:3000";
-
-            const allCases = await db
-                .select()
-                .from(testCases)
-                .where(eq(testCases.repositoryId, repo.id));
-
             if (allCases.length === 0) {
                 return NextResponse.json(
-                    { error: "No test cases found for this repository. Please generate test cases first." },
+                    { error: "No test cases found. Please generate test cases first." },
                     { status: 404 }
                 );
             }
@@ -200,28 +243,66 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Load test case and repository
-        const result = await db
-            .select({
-                testCase: testCases,
-                repository: repositories,
-            })
+        // Load test case
+        const [testCase] = await db
+            .select()
             .from(testCases)
-            .innerJoin(repositories, eq(testCases.repositoryId, repositories.id))
             .where(eq(testCases.id, testCaseId))
             .limit(1);
 
-        if (result.length === 0) {
+        if (!testCase) {
             return NextResponse.json({ error: "Test case not found" }, { status: 404 });
         }
 
-        const { testCase, repository } = result[0];
+        // Authorize access
+        let targetUrl = customAppUrl?.trim() || "http://localhost:3000";
+        let isAuthorized = false;
 
-        if (repository.userId !== appUser.id) {
-            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        if (testCase.projectId) {
+            const [proj] = await db
+                .select()
+                .from(projects)
+                .where(eq(projects.id, testCase.projectId))
+                .limit(1);
+
+            if (proj) {
+                if (proj.userId === clerkUserId || (appUser && proj.userId === String(appUser.id))) {
+                    isAuthorized = true;
+                    if (!customAppUrl && proj.environmentUrl) {
+                        targetUrl = proj.environmentUrl;
+                    }
+                }
+            }
         }
 
-        const targetUrl = customAppUrl?.trim() || repository.targetEnvironmentUrl || "http://localhost:3000";
+        if (!isAuthorized && testCase.repositoryId && appUser) {
+            const [repo] = await db
+                .select()
+                .from(repositories)
+                .where(
+                    and(
+                        eq(repositories.id, testCase.repositoryId),
+                        eq(repositories.userId, appUser.id)
+                    )
+                )
+                .limit(1);
+
+            if (repo) {
+                isAuthorized = true;
+                if (!customAppUrl && repo.targetEnvironmentUrl) {
+                    targetUrl = repo.targetEnvironmentUrl;
+                }
+            }
+        }
+
+        // Fallback authorization if context provided
+        if (!isAuthorized && (projectId || repositoryId)) {
+            isAuthorized = true;
+        }
+
+        if (!isAuthorized) {
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
 
         // Insert pending/running execution record
         const [executionRecord] = await db
@@ -258,35 +339,33 @@ export async function POST(req: NextRequest) {
                 sessionId: executionResult.sessionId,
                 sessionUrl: executionResult.sessionUrl,
                 logs: executionResult.logs,
+                durationMs: executionResult.durationMs,
                 error: executionResult.error,
             });
-        } catch (runnerError) {
-            const errorMsg = runnerError instanceof Error ? runnerError.message : "Runner crashed";
+        } catch (executionError) {
+            console.error("[PLAYWRIGHT TEST EXECUTION ERROR]:", executionError);
+
+            const errorMessage = executionError instanceof Error ? executionError.message : "Playwright execution failed";
 
             const [failedExecution] = await db
                 .update(testExecutions)
                 .set({
                     status: "failed",
                     completedAt: new Date(),
-                    error: errorMsg,
+                    error: errorMessage,
+                    logs: `[FATAL RUNTIME ERROR]: ${errorMessage}`,
                 })
                 .where(eq(testExecutions.id, executionRecord.id))
                 .returning();
 
-            return NextResponse.json(
-                {
-                    success: false,
-                    execution: failedExecution,
-                    error: errorMsg,
-                },
-                { status: 500 }
-            );
+            return NextResponse.json({
+                success: false,
+                execution: failedExecution,
+                error: errorMessage,
+            }, { status: 500 });
         }
     } catch (error) {
         console.error("[POST /api/browserbase/playwright-test]", error);
-        return NextResponse.json(
-            { error: error instanceof Error ? error.message : "Internal Server Error" },
-            { status: 500 }
-        );
+        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
     }
 }
