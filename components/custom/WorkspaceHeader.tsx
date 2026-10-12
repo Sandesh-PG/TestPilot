@@ -3,15 +3,30 @@
 import React, { useContext } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { UserButton } from '@clerk/nextjs';
 import { Zap } from 'lucide-react';
 import GitHubIntegrationButton from './GitHubIntegrationButton';
 import { UserDetailContext } from '@/context/userDetail';
 
+const NAV_ITEMS = [
+    { label: 'Dashboard', href: '/dashboard' },
+    { label: 'Workspace', href: '/workspace' },
+    { label: 'Pricing', href: '/pricing' },
+    { label: 'Contact us', href: '/contact' },
+];
+
 const WorkspaceHeader = () => {
+    const pathname = usePathname();
     const context = useContext(UserDetailContext);
     const detail = context?.UserDetail || context?.userDetail;
     const credits = detail?.user?.credits ?? detail?.credits;
+
+    const isItemActive = (href: string) => {
+        if (!pathname) return false;
+        if (href === '/') return pathname === '/';
+        return pathname === href || pathname.startsWith(`${href}/`);
+    };
 
     return (
         <header className="sticky top-0 z-40 w-full border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md px-4 sm:px-6 md:px-12 py-3.5 flex items-center justify-between">
@@ -32,27 +47,28 @@ const WorkspaceHeader = () => {
 
             {/* Menu */}
             <nav className="hidden md:block">
-                <ul className="flex gap-8 text-sm font-medium text-slate-400">
-                    <li>
-                        <Link href="/dashboard" className="hover:text-white transition-colors">
-                            Dashboard
-                        </Link>
-                    </li>
-                    <li>
-                        <Link href="/workspace" className="hover:text-white transition-colors">
-                            Workspace
-                        </Link>
-                    </li>
-                    <li>
-                        <Link href="/pricing" className="hover:text-white transition-colors">
-                            Pricing
-                        </Link>
-                    </li>
-                    <li>
-                        <Link href="/support" className="hover:text-white transition-colors">
-                            Contact us
-                        </Link>
-                    </li>
+                <ul className="flex items-center gap-1.5 sm:gap-2 text-sm font-medium">
+                    {NAV_ITEMS.map((item) => {
+                        const active = isItemActive(item.href);
+                        return (
+                            <li key={item.href}>
+                                <Link
+                                    href={item.href}
+                                    prefetch={true}
+                                    className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-1.5 text-sm transition-all duration-200 ${
+                                        active
+                                            ? 'bg-slate-900 border border-emerald-500/30 text-emerald-300 font-semibold shadow-sm shadow-emerald-950/20'
+                                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/40 border border-transparent'
+                                    }`}
+                                >
+                                    {active && (
+                                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)] animate-pulse" />
+                                    )}
+                                    <span>{item.label}</span>
+                                </Link>
+                            </li>
+                        );
+                    })}
                 </ul>
             </nav>
 

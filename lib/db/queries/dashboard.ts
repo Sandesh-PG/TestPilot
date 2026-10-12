@@ -51,58 +51,67 @@ export async function getUserDashboardData(userId: string): Promise<UserDashboar
     }
 
     try {
-        // 1. Sync any connected repositories from `repositories` table into `projects` table for this Clerk user
-        const [appUser] = await db
-            .select()
-            .from(users)
-            .where(eq(users.clerkId, userId))
-            .limit(1);
+        // 1. Parallelize initial lookup: fetch app user and existing user projects concurrently
+        const [[appUser], userProjectsInitial] = await Promise.all([
+            db
+                .select()
+                .from(users)
+                .where(eq(users.clerkId, userId))
+                .limit(1),
+            db
+                .select()
+                .from(projects)
+                .where(eq(projects.userId, userId))
+                .orderBy(desc(projects.createdAt)),
+        ]);
 
+        let userProjects = userProjectsInitial;
+
+        // 2. If appUser exists, check if any connected repositories in `repositories` need syncing into `projects`
         if (appUser) {
             const userRepos = await db
                 .select()
                 .from(repositories)
                 .where(eq(repositories.userId, appUser.id));
 
-            for (const repo of userRepos) {
-                const projectId = String(repo.id);
-                const [existingProj] = await db
+            const existingProjectIds = new Set(userProjectsInitial.map((p) => p.id));
+            const missingRepos = userRepos.filter((repo) => !existingProjectIds.has(String(repo.id)));
+
+            if (missingRepos.length > 0) {
+                await Promise.all(
+                    missingRepos.map(async (repo) => {
+                        const projectId = String(repo.id);
+                        await db.insert(projects).values({
+                            id: projectId,
+                            userId,
+                            repoName: repo.name,
+                            repoUrl: repo.url,
+                            defaultBranch: repo.defaultBranch || 'main',
+                            environmentUrl: repo.targetEnvironmentUrl || 'http://localhost:3000',
+                            createdAt: repo.connectedAt || new Date(),
+                        });
+
+                        // Link orphaned test cases to this project ID
+                        await db
+                            .update(testCases)
+                            .set({ projectId })
+                            .where(
+                                and(
+                                    eq(testCases.repositoryId, repo.id),
+                                    isNull(testCases.projectId)
+                                )
+                            );
+                    })
+                );
+
+                // Refresh userProjects after inserting missing repos
+                userProjects = await db
                     .select()
                     .from(projects)
-                    .where(eq(projects.id, projectId))
-                    .limit(1);
-
-                if (!existingProj) {
-                    await db.insert(projects).values({
-                        id: projectId,
-                        userId,
-                        repoName: repo.name,
-                        repoUrl: repo.url,
-                        defaultBranch: repo.defaultBranch || 'main',
-                        environmentUrl: repo.targetEnvironmentUrl || 'http://localhost:3000',
-                        createdAt: repo.connectedAt || new Date(),
-                    });
-
-                    // Link orphaned test cases to this project ID
-                    await db
-                        .update(testCases)
-                        .set({ projectId })
-                        .where(
-                            and(
-                                eq(testCases.repositoryId, repo.id),
-                                isNull(testCases.projectId)
-                            )
-                        );
-                }
+                    .where(eq(projects.userId, userId))
+                    .orderBy(desc(projects.createdAt));
             }
         }
-
-        // 2. Fetch all user projects
-        const userProjects = await db
-            .select()
-            .from(projects)
-            .where(eq(projects.userId, userId))
-            .orderBy(desc(projects.createdAt));
 
         if (userProjects.length === 0) {
             return {

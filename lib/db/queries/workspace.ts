@@ -44,26 +44,26 @@ export async function getWorkspaceProjectData(
     const cleanProjectId = String(projectId).trim();
 
     try {
-        // 1. Look up the project in the projects table for this user
-        const [foundProject] = await db
-            .select()
-            .from(projects)
-            .where(
-                and(
-                    eq(projects.id, cleanProjectId),
-                    eq(projects.userId, clerkUserId)
+        // 1. Look up the project in the projects table and the app user concurrently
+        const [[foundProject], [appUser]] = await Promise.all([
+            db
+                .select()
+                .from(projects)
+                .where(
+                    and(
+                        eq(projects.id, cleanProjectId),
+                        eq(projects.userId, clerkUserId)
+                    )
                 )
-            )
-            .limit(1);
+                .limit(1),
+            db
+                .select()
+                .from(users)
+                .where(eq(users.clerkId, clerkUserId))
+                .limit(1),
+        ]);
 
         let projectRecord = foundProject ?? null;
-
-        // 2. Fetch app user to check corresponding repositories
-        const [appUser] = await db
-            .select()
-            .from(users)
-            .where(eq(users.clerkId, clerkUserId))
-            .limit(1);
 
         // If not found in projects, check if projectId corresponds to a repositories record
         if (!projectRecord && appUser) {

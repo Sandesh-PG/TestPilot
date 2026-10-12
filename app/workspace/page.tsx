@@ -32,6 +32,7 @@ export default async function Workspace({
                     <div className="border-b border-slate-800/80 bg-slate-950/70 px-4 sm:px-6 md:px-12 py-2.5 backdrop-blur-md flex items-center justify-between">
                         <Link
                             href="/dashboard"
+                            prefetch={true}
                             className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-emerald-300 transition-colors"
                         >
                             <ArrowLeft className="h-3.5 w-3.5" />
@@ -53,6 +54,7 @@ export default async function Workspace({
                             <div className="mt-6">
                                 <Link
                                     href="/dashboard"
+                                    prefetch={true}
                                     className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
                                 >
                                     <ArrowLeft className="h-4 w-4" />
@@ -71,6 +73,7 @@ export default async function Workspace({
                 <div className="border-b border-slate-800/80 bg-slate-950/70 px-4 sm:px-6 md:px-12 py-2.5 backdrop-blur-md flex items-center justify-between">
                     <Link
                         href="/dashboard"
+                        prefetch={true}
                         className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-emerald-300 transition-colors"
                     >
                         <ArrowLeft className="h-3.5 w-3.5" />
@@ -102,6 +105,7 @@ export default async function Workspace({
             <div className="border-b border-slate-800/80 bg-slate-950/70 px-4 sm:px-6 md:px-12 py-2.5 backdrop-blur-md flex items-center justify-between">
                 <Link
                     href="/dashboard"
+                    prefetch={true}
                     className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-emerald-300 transition-colors"
                 >
                     <ArrowLeft className="h-3.5 w-3.5" />
